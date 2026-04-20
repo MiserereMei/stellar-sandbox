@@ -23,6 +23,7 @@ export class Simulation {
   paused: boolean = false;
   camera = { x: 0, y: 0, zoom: 1, followingId: null as string | null };
   selectedBodyId: string | null = null;
+  secondsPerSimSecond: number = 1.0;
 
   private lastFollowId: string | null = null;
   private camStartX: number = 0;
@@ -100,6 +101,7 @@ export class Simulation {
     this.G = 2.442e-7;
     this.timeScale = 1.0;
     this.missionTime = 0;
+    this.secondsPerSimSecond = 1.0;
     this.isAutopilotActive = false;
   }
 
@@ -200,48 +202,135 @@ export class Simulation {
 
   loadRealScaleSolarSystem() {
     this.clear();
-    this.G = 2.442e-7;
+    // G is scaled so that 1 sim-second = 1 real-world second.
+    // T = 31557600s (1 year). R = 23481. M = 333000. 
+    // G = 4 * pi^2 * R^3 / (T^2 * M) = 1.541e-6
+    this.G = 1.541e-6; 
     const sunId = generateId();
-    this.timeScale = 86400;
+    this.timeScale = 1.0; // Scaled time for standard physics
+    this.secondsPerSimSecond = 1.0; // 1 sim-sec = exactly 1 real second!
 
-    const SUN_R = 109; // ~109 Earth radii
-    const SUN_M = 333000; // ~333,000 Earth masses
-
+    const SUN_M = 333000;
     this.bodies.push({
-      id: sunId, name: 'Sun', mass: SUN_M, radius: SUN_R, color: 'hsl(45, 100%, 50%)',
+      id: sunId, name: 'Sun', mass: SUN_M, radius: 109.1, color: 'hsl(45, 100%, 50%)',
       position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
     });
 
-    const planets = [
-      { name: 'Mercury', dist: 9087, mass: 0.055, r: 0.38, color: 'hsl(0, 0%, 60%)' },
-      { name: 'Venus', dist: 16977, mass: 0.815, r: 0.95, color: 'hsl(30, 80%, 70%)' },
-      { name: 'Earth', dist: 23481, mass: 1.0, r: 1.0, color: 'hsl(210, 80%, 60%)' },
-      { name: 'Mars', dist: 35785, mass: 0.107, r: 0.53, color: 'hsl(0, 80%, 50%)' },
-      { name: 'Jupiter', dist: 122171, mass: 317.8, r: 11.2, color: 'hsl(20, 60%, 60%)' },
+    const AU = 23481; // 1 AU = 23,481 Earth Radii (True 1:1 Scale)
+    const vScale = Math.sqrt(this.G * SUN_M / AU) / 0.01720209895; // Conversion factor for AU/day to Sim units
+
+    // Authentic NASA JPL Horizons State Vectors (Jan 1, 2000)
+    // Masses are exactly in Earth Masses (Earth = 1.0)
+    // Radii are in Earth Radii (Earth = 1.0) so UI is 1:1 perfect.
+    const planetsData = [
+      { name: 'Mercury', x: -1.40728e-01, y: -4.43900e-01, vx: 2.11688e-02, vy: -7.09797e-03, mass: 0.055, r: 0.38, color: 'hsl(0, 0%, 60%)' },
+      { name: 'Venus',   x: -7.18630e-01, y: -2.25038e-02, vx: 5.13532e-04, vy: -2.03061e-02, mass: 0.815, r: 0.95, color: 'hsl(30, 80%, 70%)' },
+      { name: 'Earth',   x: -1.68524e-01, y: 9.68783e-01,  vx: -1.72339e-02, vy: -3.00766e-03, mass: 1.0, r: 1.0, color: 'hsl(210, 80%, 60%)' },
+      { name: 'Mars',    x: 1.39036e+00,  y: -2.10097e-02, vx: 7.47927e-04, vy: 1.51862e-02, mass: 0.107, r: 0.53, color: 'hsl(0, 80%, 50%)' },
+      { name: 'Jupiter', x: 4.00346e+00,  y: 2.93535e+00,  vx: -4.56375e-03, vy: 6.44727e-03, mass: 317.8, r: 11.2, color: 'hsl(20, 60%, 60%)' },
+      { name: 'Saturn',  x: 6.40855e+00,  y: 6.56804e+00,  vx: -4.29054e-03, vy: 3.89199e-03, mass: 95.2, r: 9.4, color: 'hsl(40, 50%, 70%)' },
+      { name: 'Uranus',  x: 1.44305e+01,  y: -1.37356e+01, vx: 2.67846e-03, vy: 2.67242e-03, mass: 14.5, r: 4.0, color: 'hsl(180, 50%, 80%)' },
+      { name: 'Neptune', x: 1.68107e+01,  y: -2.49926e+01, vx: 2.57921e-03, vy: 1.77635e-03, mass: 17.1, r: 3.9, color: 'hsl(220, 70%, 60%)' },
     ];
 
-    planets.forEach(p => {
-      const v = Math.sqrt(this.G * SUN_M / p.dist);
+    planetsData.forEach(p => {
       const id = generateId();
+      const posX = p.x * AU;
+      const posY = p.y * AU;
+      const velX = p.vx * vScale;
+      const velY = p.vy * vScale;
+
       this.bodies.push({
         id, name: p.name, mass: p.mass, radius: p.r, color: p.color,
-        position: { x: p.dist, y: 0 }, velocity: { x: 0, y: v }, trail: []
+        position: { x: posX, y: posY }, 
+        velocity: { x: velX, y: velY }, 
+        trail: []
       });
 
       if (p.name === 'Earth') {
-        const mDist = 27.5;
-        const mMass = 0.0073;
-        const mRadius = 0.12;
+        const mDist = 60; // 60 Earth Radii
         const mV = Math.sqrt(this.G * p.mass / mDist);
         this.bodies.push({
-          id: generateId(), name: 'Moon', mass: mMass, radius: mRadius, color: 'hsl(0, 0%, 80%)',
-          position: { x: p.dist + mDist, y: 0 }, velocity: { x: 0, y: v + mV }, trail: []
+          id: generateId(), name: 'Moon', mass: 0.0123, radius: 0.27, color: 'hsl(0, 0%, 80%)',
+          position: { x: posX + mDist, y: posY }, 
+          velocity: { x: velX, y: velY + mV }, 
+          trail: []
         });
       }
     });
 
-    this.camera.x = 0; this.camera.y = 0; this.camera.zoom = 0.01;
+    this.camera.x = 0; this.camera.y = 0;
+    this.camera.zoom = 0.03; 
     this.camera.followingId = sunId;
+  }
+
+  loadOECSystem(system: any) {
+    this.clear();
+    this.G = 11508; // Correct G for AU=23481, M=333000, T=1day
+    this.timeScale = 86400; // 1 day per sec
+    this.secondsPerSimSecond = 1.0; // In this system, 1 sim-sec = 1 real sec, but timescale scales it.
+
+    const AU = 23481;
+    const SOLAR_MASS = 333000;
+    const JUPITER_MASS = 317.8;
+    const SOLAR_RADIUS = 109;
+    const JUPITER_RADIUS = 11.2;
+
+    const starId = generateId();
+    const starMass = system.star.mass * SOLAR_MASS;
+    const starRadius = system.star.radius * SOLAR_RADIUS;
+    
+    // Get color based on temperature
+    let starColor = 'hsl(45, 100%, 50%)';
+    if (system.star.temp < 3700) starColor = 'hsl(10, 100%, 60%)'; // M-Dwarf
+    else if (system.star.temp < 5200) starColor = 'hsl(30, 100%, 60%)'; // K-Dwarf
+    else if (system.star.temp > 7500) starColor = 'hsl(200, 100%, 80%)'; // A/B-Type
+
+    this.bodies.push({
+        id: starId,
+        name: system.name,
+        mass: starMass,
+        radius: Math.max(5, starRadius), // Minimum visual size
+        color: starColor,
+        position: { x: 0, y: 0 },
+        velocity: { x: 0, y: 0 },
+        trail: []
+    });
+
+    system.planets.forEach((p: any) => {
+        if (p.semimajoraxis <= 0) return;
+        const dist = p.semimajoraxis * AU;
+        const mass = p.mass > 0 ? p.mass * JUPITER_MASS : 1.0; 
+        const radius = p.radius > 0 ? p.radius * JUPITER_RADIUS : 1.0;
+        
+        const v = Math.sqrt((this.G * starMass) / dist);
+        const ecc = p.eccentricity || 0;
+        const rp = dist * (1 - ecc);
+        const vp = v * Math.sqrt((1 + ecc) / (1 - ecc));
+
+        // Visual radius scaling balanced for the new 200x zoom
+        const visualRadius = Math.max(8, radius * 1.5); 
+
+        this.bodies.push({
+            id: generateId(),
+            name: p.name,
+            mass: mass,
+            radius: visualRadius,
+            color: p.temperature > 300 ? 'hsl(20, 70%, 50%)' : 'hsl(200, 70%, 50%)',
+            position: { x: rp, y: 0 },
+            velocity: { x: 0, y: vp },
+            trail: []
+        });
+    });
+
+    this.camera.followingId = starId;
+    this.camera.x = 0;
+    this.camera.y = 0;
+    
+    // HUGE FIX: Zoom was 200x too small. Setting it to a usable scale.
+    // 1 AU should be around 250-500 pixels for a "close" start.
+    const innerA = system.planets[0]?.semimajoraxis || 1.0;
+    this.camera.zoom = 0.1 / Math.max(0.1, innerA); // Much larger zoom
   }
 
   loadAsteroidBelt() {
@@ -350,7 +439,61 @@ export class Simulation {
   public missionTime = 0;
   public currentScript = '';
   private autopilotStepFn: any = null;
-  private autopilotLog: (msg: string) => void = () => { };
+  public autopilotLog: (msg: string) => void = () => { };
+
+  getCurrentDate(): Date {
+    // Base J2000 epoch: Jan 1, 2000 12:00:00 UTC = 946728000000 ms
+    const baseDate = 946728000000;
+    return new Date(baseDate + (this.missionTime * this.secondsPerSimSecond * 1000));
+  }
+
+  jumpToDateAsync(targetDate: Date, onProgress: (p: number) => void, onComplete: () => void) {
+    const targetTimeMs = targetDate.getTime();
+    const currentTimeMs = this.getCurrentDate().getTime();
+    const diffMs = targetTimeMs - currentTimeMs;
+    
+    if (Math.abs(diffMs) < 1000) {
+      onComplete();
+      return;
+    }
+
+    const diffSimSeconds = (diffMs / 1000) / this.secondsPerSimSecond;
+    const direction = Math.sign(diffSimSeconds);
+    const totalSecondsToSimulate = Math.abs(diffSimSeconds);
+    
+    // Use 1000s step (about 15 mins). Small enough for inner planet stability, large enough to jump years fast.
+    const stepDt = 1000 * direction; 
+    const totalSteps = Math.ceil(totalSecondsToSimulate / Math.abs(stepDt));
+    
+    let currentStep = 0;
+    const stepsPerChunk = 50000; 
+    
+    const originalPaused = this.paused;
+    this.paused = true; 
+    
+    // Clear trails before jumping so we don't draw lines across the universe
+    this.bodies.forEach(b => b.trail = []);
+
+    const chunk = () => {
+      const stepsToDo = Math.min(stepsPerChunk, totalSteps - currentStep);
+      for (let i = 0; i < stepsToDo; i++) {
+        this.stepPhysics(stepDt);
+      }
+      currentStep += stepsToDo;
+      this.missionTime += (stepsToDo * stepDt);
+      
+      onProgress(currentStep / totalSteps);
+      
+      if (currentStep < totalSteps) {
+        requestAnimationFrame(chunk);
+      } else {
+        this.paused = originalPaused;
+        onComplete();
+      }
+    };
+    
+    requestAnimationFrame(chunk);
+  }
 
   getAltitude(): number {
     if (!this.vehicle) return 0;
@@ -527,29 +670,42 @@ function autopilotStep(t, fc) {
 }`;
   }
 
-  loadOrbitalInsertion() {
+  loadRocketOnEarth() {
     this.clear();
-    this.timeScale = 300;
-    this.G = 2.442e-7;
-
+    this.G = 1;
+    const earthRadius = 500;
     const earthId = generateId();
     this.bodies.push({
-      id: earthId, name: 'Earth', mass: 1.0, radius: 1.0, color: 'hsl(210, 80%, 60%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      id: earthId,
+      name: 'Earth',
+      mass: 500000,
+      radius: earthRadius,
+      color: 'hsl(210, 80%, 60%)',
+      position: { x: 0, y: 0 },
+      velocity: { x: 0, y: 0 },
+      trail: []
     });
 
-    const alt = 0.2;
-    const r = 1.0 + alt;
-    const vOrbit = Math.sqrt(this.G * 1.0 / r);
+    this.vehicle = {
+      id: generateId(),
+      name: 'Rocket',
+      mass: 1.0,
+      radius: 5,
+      color: 'white',
+      position: { x: 0, y: -earthRadius - 10 },
+      velocity: { x: 0, y: 0 },
+      trail: [],
+      type: 'rocket',
+      rotation: 0,
+      angularVelocity: 0,
+      isHeatProtected: false,
+      thrustPower: 0.05,
+      maxKineticEnergy: 50000
+    };
+    this.bodies.push(this.vehicle);
 
-    this.creationTemplate = { presetType: 'rocket' };
-    const rocket = this.addBody(0, -r, vOrbit * 0.85, 0);
-    if (rocket) {
-      this.vehicle = rocket as any;
-      (this.vehicle as any).rotation = 0;
-      this.camera.followingId = rocket.id;
-      this.camera.zoom = 50;
-    }
+    this.camera.followingId = earthId;
+    this.camera.zoom = 0.8;
   }
 
   loadBlackHoleDevour() {
@@ -575,10 +731,32 @@ function autopilotStep(t, fc) {
       const stepDt = safeDt / substeps;
 
       for (let step = 0; step < substeps; step++) {
-        // Only increment mission time if simulation is running
         if (!this.paused) {
           this.missionTime += stepDt;
         }
+        this.stepPhysics(stepDt);
+      }
+      
+      this.trailAccumulator += Math.abs(safeDt);
+      if (this.trailAccumulator > 0.05 * Math.max(1, this.timeScale / 1000)) {
+        this.updateTrails();
+        this.trailAccumulator = 0;
+      }
+    }
+
+    this.updateCameraFollow(dt);
+    this.computeProjections();
+  }
+
+  updateTrails() {
+    for (const b of this.bodies) {
+      if (!b.trail) b.trail = [];
+      b.trail.push({ ...b.position });
+      if (b.trail.length > 300) b.trail.shift();
+    }
+  }
+
+  stepPhysics(stepDt: number) {
 
         // Autopilot Execution
         if (this.isAutopilotActive && this.autopilotStepFn && this.vehicle) {
@@ -586,19 +764,19 @@ function autopilotStep(t, fc) {
           const KG_PER_UNIT_MASS = 5.972e24;
 
           const formatBody = (b: Body) => {
-              const dx = b.position.x - this.vehicle!.position.x;
-              const dy = b.position.y - this.vehicle!.position.y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              return {
-                  id: b.id,
-                  name: b.name,
-                  mass: b.mass * KG_PER_UNIT_MASS,
-                  circumference: 2 * Math.PI * b.radius * METER_PER_UNIT,
-                  relativeX: dx * METER_PER_UNIT,
-                  relativeY: dy * METER_PER_UNIT,
-                  distance: dist * METER_PER_UNIT,
-                  angle: Math.atan2(dy, dx) * (180 / Math.PI)
-              };
+            const dx = b.position.x - this.vehicle!.position.x;
+            const dy = b.position.y - this.vehicle!.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return {
+              id: b.id,
+              name: b.name,
+              mass: b.mass * KG_PER_UNIT_MASS,
+              circumference: 2 * Math.PI * b.radius * METER_PER_UNIT,
+              relativeX: dx * METER_PER_UNIT,
+              relativeY: dy * METER_PER_UNIT,
+              distance: dist * METER_PER_UNIT,
+              angle: Math.atan2(dy, dx) * (180 / Math.PI)
+            };
           };
 
           const fc = {
@@ -620,12 +798,12 @@ function autopilotStep(t, fc) {
             getRadialSpeed: () => this.getRadialSpeed(),
             getTangentialSpeed: () => this.getTangentialSpeed(),
             getDominantBody: () => {
-                const dom = this.getDominantBody(this.vehicle!.position);
-                return dom ? formatBody(dom) : null;
+              const dom = this.getDominantBody(this.vehicle!.position);
+              return dom ? formatBody(dom) : null;
             },
             getBodyById: (id: string) => {
-                const b = this.bodies.find(body => body.id === id);
-                return b ? formatBody(b) : null;
+              const b = this.bodies.find(body => body.id === id);
+              return b ? formatBody(b) : null;
             },
             log: (msg: string) => this.autopilotLog(msg)
           };
@@ -813,19 +991,6 @@ function autopilotStep(t, fc) {
           }
         }
         this.bodies = this.bodies.filter(b => b.mass > 0);
-      }
-      this.trailAccumulator += Math.abs(safeDt);
-      if (this.trailAccumulator > 0.05 * Math.max(1, this.timeScale / 1000)) {
-        this.trailAccumulator = 0;
-        for (const b of this.bodies) {
-          if (!b.trail) b.trail = [];
-          b.trail.push({ ...b.position });
-          if (b.trail.length > 300) b.trail.shift();
-        }
-      }
-    }
-    this.updateCameraFollow(dt);
-    this.computeProjections();
   }
 
   computeProjections() {

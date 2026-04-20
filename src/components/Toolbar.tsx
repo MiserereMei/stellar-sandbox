@@ -3,7 +3,9 @@ import { Simulation } from '../lib/Simulation';
 import { MousePointer2, CircleDot, Play, Pause, FastForward, Undo2, MousePointerClick, Sparkles, Plus, Settings, ZoomIn, ZoomOut, Maximize, Ruler, Terminal } from 'lucide-react';
 import { ToolMode, AddMode, BodyPreset, VisualSettings, ActivePopUp } from '../App';
 import { AIChat } from './AIChat';
+import { catalogue, PlanetarySystem } from '../lib/CatalogueService';
 import { motion, AnimatePresence } from 'motion/react';
+import { Search, Globe, Sun, Layers } from 'lucide-react';
 
 interface ToolbarProps {
   sim: Simulation;
@@ -31,9 +33,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [timeScale, setTimeScale] = useState(sim.timeScale);
   const [timeUnit, setTimeUnit] = useState<number>(1);
   const [inputValue, setInputValue] = useState<string>("1");
-  const [addMenuTab, setAddMenuTab] = useState<'body' | 'vehicle' | 'system' | 'simulation'>('body');
+  const [addMenuTab, setAddMenuTab] = useState<'body' | 'vehicle' | 'system' | 'simulation' | 'exoplanets'>('body');
   const [anchors, setAnchors] = useState<Record<string, { left: number, top: number }>>({});
   const [displayZoom, setDisplayZoom] = useState(sim.camera.zoom);
+  const dateRef = React.useRef<HTMLSpanElement>(null);
+  const [oecSystems, setOecSystems] = useState<PlanetarySystem[]>([]);
+  const [loadingOEC, setLoadingOEC] = useState(false);
+  const [oecSearch, setOecSearch] = useState('');
+  const [oecFilter, setOecFilter] = useState<'all' | 'multi' | 'nearby'>('all');
+  const [isJumping, setIsJumping] = useState(false);
+  const [jumpProgress, setJumpProgress] = useState(0);
+
+  const handleDateClick = () => {
+    if (isJumping) return;
+    const newDateStr = prompt("Enter target date (YYYY-MM-DD):", sim.getCurrentDate().toISOString().split('T')[0]);
+    if (newDateStr) {
+       const newDate = new Date(newDateStr);
+       if (!isNaN(newDate.getTime())) {
+          setIsJumping(true);
+          setJumpProgress(0);
+          sim.jumpToDateAsync(newDate, (p) => setJumpProgress(p), () => setIsJumping(false));
+       }
+    }
+  };
 
   const handleZoomIn = () => {
     sim.camera.zoom *= 1.5;
@@ -71,8 +93,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       }));
 
       if (id === 'add') setToolMode('add');
+      if (id === 'add' && addMenuTab === 'exoplanets' && oecSystems.length === 0) {
+          fetchOEC();
+      }
       setActivePopUp(id);
     }
+  };
+
+  const fetchOEC = async () => {
+    setLoadingOEC(true);
+    const data = await catalogue.fetchCatalogue();
+    setOecSystems(data);
+    setLoadingOEC(false);
   };
 
   const timeUnits = [
@@ -154,6 +186,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         const optimal = getOptimalTimeUnit(sim.timeScale);
         setTimeUnit(optimal);
         setInputValue(parseFloat((sim.timeScale / optimal).toFixed(6)).toString());
+      }
+      if (dateRef.current) {
+        dateRef.current.innerText = sim.getCurrentDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
       }
     }, 16); // 60fps sync
     return () => clearInterval(interval);
@@ -286,6 +321,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 ×2
               </button>
             </div>
+
+            <div 
+              onClick={handleDateClick}
+              className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''}`}
+            >
+              {isJumping && (
+                <div className="absolute left-0 bottom-0 h-full bg-blue-500/20 transition-all duration-75" style={{ width: `${jumpProgress * 100}%` }} />
+              )}
+              <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-0.5 group-hover:text-blue-400 transition-colors z-10 relative">
+                {isJumping ? 'Calculating...' : 'Epoch Date'}
+              </span>
+              <span ref={dateRef} className="text-[12px] font-mono font-bold text-white tracking-tight z-10 relative">
+                {sim.getCurrentDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -354,14 +404,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="fixed bg-[#0c1016]/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-4 w-72 flex flex-col gap-4 z-[100] will-change-transform"
+            className="fixed bg-[#0c1016]/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-4 flex flex-col gap-4 z-[100] w-[500px] will-change-transform"
           >
-            <div className="flex bg-white/5 p-1 rounded-lg gap-1">
-              {(['body', 'vehicle', 'system', 'simulation'] as const).map(tab => (
+            <div className="flex bg-white/5 p-1 rounded-lg gap-1 overflow-x-auto no-scrollbar">
+              {(['body', 'vehicle', 'system', 'simulation', 'exoplanets'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => {
                     setAddMenuTab(tab);
+                    if (tab === 'exoplanets' && oecSystems.length === 0) fetchOEC();
                     if (tab === 'vehicle') {
                       setAddMode('static');
                       sim.creationTemplate.presetType = 'rocket';
@@ -380,7 +431,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
             {addMenuTab === 'vehicle' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       sim.creationTemplate.presetType = 'rocket';
@@ -431,7 +482,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
             {addMenuTab === 'body' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {(['star', 'planet', 'moon', 'comet', 'blackhole'] as const).map(p => {
                     const tempSim = new Simulation();
                     tempSim.creationTemplate.presetType = p;
@@ -503,7 +554,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   { label: 'Meteor Shower', action: () => sim.loadMeteorShower() },
                   { label: 'Auto-Orbit Mission', action: () => sim.loadOrbitMission() },
                   { label: 'Artemis 2 Mission', action: () => sim.loadArtemis2Mission() },
-                  { label: 'Orbital Insertion', action: () => sim.loadOrbitalInsertion() },
+                  { label: 'Rocket on Earth', action: () => sim.loadRocketOnEarth() },
                   { label: 'Black Hole Devour', action: () => sim.loadBlackHoleDevour(), red: true }
                 ].map(scenario => (
                   <button
@@ -514,6 +565,86 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     {scenario.label}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {addMenuTab === 'exoplanets' && (
+              <div className="space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input 
+                        type="text" 
+                        placeholder="Search OEC (e.g. TRAPPIST, Kepler)..." 
+                        value={oecSearch}
+                        onChange={(e) => setOecSearch(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50"
+                    />
+                </div>
+
+                <div className="flex gap-1">
+                    {(['all', 'multi', 'nearby'] as const).map(f => (
+                        <button 
+                            key={f}
+                            onClick={() => setOecFilter(f)}
+                            className={`flex-1 py-1 rounded text-[8px] font-bold uppercase tracking-widest transition-all ${oecFilter === f ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-500'}`}
+                        >
+                            {f}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-1" style={{ maxHeight: '400px' }}>
+                    {loadingOEC ? (
+                        <div className="py-20 flex flex-col items-center justify-center gap-3 opacity-50">
+                            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                            <div className="text-[9px] font-bold tracking-[2px] uppercase">Retrieving Catalogue...</div>
+                        </div>
+                    ) : (
+                        oecSystems
+                          .filter(s => {
+                            if (oecSearch) return s.name.toLowerCase().includes(oecSearch.toLowerCase());
+                            if (oecFilter === 'multi') return s.planets.length > 3;
+                            if (oecFilter === 'nearby') return s.planets[0].distance < 20 && s.planets[0].distance > 0;
+                            return true;
+                          })
+                          .slice(0, 100)
+                          .map(sys => (
+                            <button 
+                                key={sys.name}
+                                onClick={() => { sim.loadOECSystem(sys); setActivePopUp(null); }}
+                                className="w-full flex items-center justify-between bg-black/40 hover:bg-blue-900/10 border border-white/5 hover:border-blue-500/30 p-3 rounded-xl transition-all group"
+                            >
+                                <div className="text-left flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                                        {sys.planets.length > 1 ? <Layers size={14} /> : <Globe size={14} />}
+                                    </div>
+                                    <div>
+                                        <div className="text-[11px] font-bold text-white group-hover:text-blue-400">{sys.name}</div>
+                                        <div className="text-[9px] text-gray-500 mt-0.5">
+                                            {sys.planets.length} Planets • {sys.star.mass.toFixed(2)} M☉ • {sys.planets[0].radius > 0 ? (sys.planets[0].radius * 11.2).toFixed(1) : '?'} R⊕ • {sys.planets[0].mass > 0 ? (sys.planets[0].mass * 317.8).toFixed(1) : '?'} M⊕
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[8px] text-blue-500 font-bold tracking-widest group-hover:translate-x-1 transition-transform">DEPLOY →</div>
+                                    {sys.planets[0].distance > 0 && (
+                                        <div className="text-[7px] text-gray-600 mt-1">{sys.planets[0].distance.toFixed(1)} pc</div>
+                                    )}
+                                </div>
+                            </button>
+                        ))
+                    )}
+                </div>
+
+                <div className="p-2 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                    <div className="text-[8px] text-blue-400/80 uppercase font-bold tracking-[2px] flex items-center gap-2">
+                        <Sun size={10} />
+                        Scientific Metadata
+                    </div>
+                    <div className="text-[8px] text-gray-500 mt-1 leading-relaxed">
+                        Showing {oecSystems.length} systems from OEC. Parameters are derived from RV/Transit data.
+                    </div>
+                </div>
               </div>
             )}
           </motion.div>
