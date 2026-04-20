@@ -8,10 +8,11 @@ interface AIChatProps {
   sim: Simulation;
   show: boolean;
   onClose: () => void;
-  anchorRect?: { left: number, top: number };
+  anchorRect?: { left: number, top: number, side?: 'left' | 'right' };
+  apiKey: string;
 }
 
-export const AIChat: React.FC<AIChatProps> = ({ sim, show, onClose, anchorRect }) => {
+export const AIChat: React.FC<AIChatProps> = ({ sim, show, onClose, anchorRect, apiKey }) => {
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [debugStream, setDebugStream] = useState('');
@@ -25,9 +26,8 @@ export const AIChat: React.FC<AIChatProps> = ({ sim, show, onClose, anchorRect }
     setDebugStream('');
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-         throw new Error("GEMINI_API_KEY environment variable is not set.");
+         throw new Error("Gemini API Key is missing. Please provide one in Settings (bottom right icon).");
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -125,13 +125,14 @@ Current state context:
       {show && (
         <motion.div 
           style={anchorRect ? { 
-            left: anchorRect.left, 
+            left: anchorRect.side === 'left' ? anchorRect.left : undefined,
+            right: anchorRect.side === 'right' ? (window.innerWidth - anchorRect.left) : undefined,
             bottom: window.innerHeight - anchorRect.top + 16 
           } : undefined}
-          initial={{ opacity: 0, y: 20, x: "-50%" }}
-          animate={{ opacity: 1, y: 0, x: "-50%" }}
-          exit={{ opacity: 0, y: 20, x: "-50%" }}
-          className={`fixed ${!anchorRect && 'bottom-[100px] left-1/2'} w-[360px] pointer-events-none z-[100] will-change-transform`}
+          initial={{ opacity: 0, y: 20, x: anchorRect ? 0 : "-50%" }}
+          animate={{ opacity: 1, y: 0, x: anchorRect ? 0 : "-50%" }}
+          exit={{ opacity: 0, y: 20, x: anchorRect ? 0 : "-50%" }}
+          className={`fixed ${!anchorRect ? 'bottom-[100px] left-1/2' : ''} w-[360px] pointer-events-none z-[100] will-change-transform`}
         >
           <div className="bg-[#11141b]/45 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 pointer-events-auto flex flex-col gap-5">
 

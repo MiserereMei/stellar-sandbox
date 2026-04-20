@@ -34,6 +34,12 @@ export default function App() {
     trailsEnabled: true,
   });
   const [showAutopilot, setShowAutopilot] = useState(false);
+  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('stellar_api_key') || '');
+
+  const handleSetApiKey = (key: string) => {
+    setApiKey(key);
+    localStorage.setItem('stellar_api_key', key);
+  };
 
   const onSelectBody = React.useCallback((id: string | null) => {
     setSelectedBodyId(id);
@@ -80,6 +86,8 @@ export default function App() {
             setShowAutopilot(val);
             if (val) setSelectedBodyId(null);
           }}
+          apiKey={apiKey}
+          setApiKey={handleSetApiKey}
         />
 
         {/* Right Sidebar */}
