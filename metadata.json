@@ -1,0 +1,6 @@
+{
+  "name": "Stellar Sandbox",
+  "description": "Physics sandbox where you can simulate planetary trajectories, create orbits, and use AI to generate entire star systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

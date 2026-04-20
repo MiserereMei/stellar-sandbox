@@ -1,0 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-bg-deep: #05070a;
+  --color-panel-bg: #11141b;
+  --color-panel-border: #232936;
+  --color-accent-blue: #3b82f6;
+  --color-text-main: #e2e8f0;
+  --color-text-dim: #94a3b8;
+  
+  --font-sans: "Inter", -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
+}
