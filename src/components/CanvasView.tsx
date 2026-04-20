@@ -891,6 +891,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
         sim.update(dt);
 
+        if (sim.isJumping) return;
+
         // Apply Momentum Pan
         const iState = interactionState.current;
         if (

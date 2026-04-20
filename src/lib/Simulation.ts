@@ -21,6 +21,10 @@ export class Simulation {
   G: number = 0.5;
   timeScale: number = 1.0;
   paused: boolean = false;
+  isJumping: boolean = false;
+  jumpProgress: number = 0;
+  cancelJump: boolean = false;
+  private pendingJump: (() => void) | null = null;
   camera = { x: 0, y: 0, zoom: 1, followingId: null as string | null };
   selectedBodyId: string | null = null;
   secondsPerSimSecond: number = 1.0;
@@ -447,7 +451,7 @@ export class Simulation {
     return new Date(baseDate + (this.missionTime * this.secondsPerSimSecond * 1000));
   }
 
-  jumpToDateAsync(targetDate: Date, onProgress: (p: number) => void, onComplete: () => void) {
+  jumpToDateAsync(targetDate: Date, precision: 'fast' | 'high' | 'ultra' = 'high', onProgress: (p: number) => void, onComplete: () => void) {
     const targetTimeMs = targetDate.getTime();
     const currentTimeMs = this.getCurrentDate().getTime();
     const diffMs = targetTimeMs - currentTimeMs;
@@ -461,15 +465,22 @@ export class Simulation {
     const direction = Math.sign(diffSimSeconds);
     const totalSecondsToSimulate = Math.abs(diffSimSeconds);
     
-    // Use 1000s step (about 15 mins). Small enough for inner planet stability, large enough to jump years fast.
-    const stepDt = 1000 * direction; 
+    // Select step size based on precision
+    let stepSize = 1000; // default (high)
+    if (precision === 'fast') stepSize = 3600; // 1 hour steps
+    if (precision === 'ultra') stepSize = 60;   // 1 minute steps (extremely precise)
+
+    const stepDt = stepSize * direction; 
     const totalSteps = Math.ceil(totalSecondsToSimulate / Math.abs(stepDt));
     
     let currentStep = 0;
-    const stepsPerChunk = 50000; 
+    const stepsPerChunk = 100000; 
     
     const originalPaused = this.paused;
     this.paused = true; 
+    this.isJumping = true; 
+    this.cancelJump = false;
+    this.jumpProgress = 0;
     
     // Clear trails before jumping so we don't draw lines across the universe
     this.bodies.forEach(b => b.trail = []);
@@ -481,18 +492,36 @@ export class Simulation {
       }
       currentStep += stepsToDo;
       this.missionTime += (stepsToDo * stepDt);
+      this.jumpProgress = currentStep / totalSteps;
       
-      onProgress(currentStep / totalSteps);
+      onProgress(this.jumpProgress);
+      
+      if (this.cancelJump) {
+        this.paused = originalPaused;
+        this.isJumping = false;
+        this.jumpProgress = 0;
+        onComplete();
+        return;
+      }
       
       if (currentStep < totalSteps) {
-        requestAnimationFrame(chunk);
+        setTimeout(chunk, 0); // Decouple from 60fps to calculate as fast as CPU allows
       } else {
         this.paused = originalPaused;
+        this.isJumping = false;
+        this.pendingJump = null;
         onComplete();
       }
     };
     
-    requestAnimationFrame(chunk);
+    this.pendingJump = () => setTimeout(chunk, 0);
+  }
+
+  startJump() {
+    if (this.pendingJump) {
+      this.pendingJump();
+      this.pendingJump = null;
+    }
   }
 
   getAltitude(): number {

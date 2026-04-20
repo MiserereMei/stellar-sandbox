@@ -43,18 +43,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [oecFilter, setOecFilter] = useState<'all' | 'multi' | 'nearby'>('all');
   const [isJumping, setIsJumping] = useState(false);
   const [jumpProgress, setJumpProgress] = useState(0);
+  const [jumpTargetDate, setJumpTargetDate] = useState(sim.getCurrentDate().toISOString().split('T')[0]);
+  const [jumpPrecision, setJumpPrecision] = useState<'fast' | 'high' | 'ultra'>('high');
 
-  const handleDateClick = () => {
+  const handleDateClick = (e: React.MouseEvent) => {
     if (isJumping) return;
-    const newDateStr = prompt("Enter target date (YYYY-MM-DD):", sim.getCurrentDate().toISOString().split('T')[0]);
-    if (newDateStr) {
-       const newDate = new Date(newDateStr);
-       if (!isNaN(newDate.getTime())) {
-          setIsJumping(true);
-          setJumpProgress(0);
-          sim.jumpToDateAsync(newDate, (p) => setJumpProgress(p), () => setIsJumping(false));
-       }
-    }
+    togglePopUp('jump', e);
   };
 
   const handleZoomIn = () => {
@@ -324,7 +318,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
             <div 
               onClick={handleDateClick}
-              className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''}`}
+              className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''} ${activePopUp === 'jump' ? 'border-blue-500/50 bg-blue-500/10' : ''}`}
             >
               {isJumping && (
                 <div className="absolute left-0 bottom-0 h-full bg-blue-500/20 transition-all duration-75" style={{ width: `${jumpProgress * 100}%` }} />
@@ -647,6 +641,77 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
               </div>
             )}
+          </motion.div>
+        )}
+
+        {activePopUp === 'jump' && (
+          <motion.div
+            style={{
+              left: anchors['jump']?.left,
+              bottom: '80px',
+              transform: anchors['jump']?.side === 'right' ? 'translateX(-100%)' : 'none'
+            }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className={`fixed bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl z-[60] flex flex-col gap-4 w-72`}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-1">
+              <div className="flex items-center gap-2">
+                <FastForward size={16} className="text-blue-400" />
+                <span className="text-[11px] font-bold uppercase tracking-widest text-white">Time Jump</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Target Date</label>
+                <input 
+                  type="date"
+                  value={jumpTargetDate}
+                  onChange={(e) => setJumpTargetDate(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[12px] text-white outline-none focus:border-blue-500/50 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Calculation Precision</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {[
+                    { id: 'fast', label: 'Fast', desc: '1h steps' },
+                    { id: 'high', label: 'High', desc: '15m steps' },
+                    { id: 'ultra', label: 'Ultra', desc: '1m steps' }
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setJumpPrecision(p.id as any)}
+                      className={`flex flex-col items-center gap-0.5 py-2 rounded-xl border transition-all ${jumpPrecision === p.id ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'}`}
+                    >
+                      <span className="text-[9px] font-bold uppercase">{p.label}</span>
+                      <span className="text-[7px] opacity-60 font-mono uppercase">{p.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  const d = new Date(jumpTargetDate);
+                  if (!isNaN(d.getTime())) {
+                    setIsJumping(true);
+                    setJumpProgress(0);
+                    sim.jumpToDateAsync(d, jumpPrecision, (p) => setJumpProgress(p), () => {
+                      setIsJumping(false);
+                    });
+                    setActivePopUp(null);
+                  }
+                }}
+                disabled={isJumping}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl py-3 text-[10px] font-bold uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] mt-2"
+              >
+                Initiate Warp
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

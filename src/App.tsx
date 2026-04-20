@@ -3,6 +3,7 @@ import { Simulation } from './lib/Simulation';
 import { CanvasView } from './components/CanvasView';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
+import { TimeJumpOverlay } from './components/TimeJumpOverlay';
 import { AIChat } from './components/AIChat';
 import { AutopilotConsole } from './components/AutopilotConsole';
 import { AnimatePresence } from 'motion/react';
@@ -17,7 +18,7 @@ export type VisualSettings = {
   trailsEnabled: boolean;
 };
 
-export type ActivePopUp = 'ai' | 'add' | 'settings' | null;
+export type ActivePopUp = 'ai' | 'add' | 'settings' | 'jump' | null;
 
 export default function App() {
   const sim = useMemo(() => new Simulation(), []);
@@ -68,6 +69,8 @@ export default function App() {
             setActivePopUp={handleSetActivePopUp}
           />
         </main>
+
+        <TimeJumpOverlay sim={sim} />
 
         <Toolbar 
           sim={sim} 
