@@ -75,7 +75,7 @@ export class Simulation {
     return dominant;
   }
 
-  getBodyMetadataFromPreset(): { name: string, mass: number, radius: number, color: string, isBlackHole?: boolean, thrustPower?: number, maxKineticEnergy?: number } {
+  getBodyMetadataFromPreset(): { name: string, mass: number, radius: number, length?: number, color: string, isBlackHole?: boolean, thrustPower?: number, maxKineticEnergy?: number } {
     const p = this.creationTemplate.presetType;
     if (p === 'star') {
       return { name: `Star ${this.bodies.length + 1}`, mass: 333000, radius: 109, color: 'hsl(45, 100%, 50%)' };
@@ -88,10 +88,13 @@ export class Simulation {
       const rs = (2 * this.G * mass) / (this.C * this.C);
       return { name: `Black Hole ${this.bodies.length + 1}`, mass, radius: rs * 2.6, color: '#000000', isBlackHole: true };
     } else if (p === 'rocket') {
-      // Artemis 2 / SLS Block 1: thrust-to-weight ratio ~1.5, physical length 98m
-      return { name: 'Rocket', mass: 1e-18, radius: 3.4e-6, color: '#ffffff', thrustPower: 3.663e-7, maxKineticEnergy: 20000 };
+      // Artemis 2 / SLS Block 1: 2.6M kg (4.35e-19 Earth Mass), 98m length (1.54e-5 Earth Radii)
+      // Thrust-to-weight ratio ~1.5 means thrustPower should be ~1.5 * G = 3.66e-7
+      const length = 1.538e-5;
+      return { name: 'Artemis SLS', mass: 4.353e-19, radius: length / 2, length, color: '#ffffff', thrustPower: 3.663e-7, maxKineticEnergy: 20000 };
     } else if (p === 'heatProtectedRocket') {
-      return { name: 'Heat-Protected Rocket', mass: 1.5e-18, radius: 3.4e-6, color: '#f97316', thrustPower: 4.5e-7, maxKineticEnergy: 50000 };
+      const length = 1.538e-5;
+      return { name: 'Artemis SLS (Shielded)', mass: 4.353e-19, radius: length / 2, length, color: '#f97316', thrustPower: 4.5e-7, maxKineticEnergy: 50000 };
     } else {
       return { name: `Comet ${this.bodies.length + 1}`, mass: 2e-11, radius: 0.002, color: 'hsl(180, 50%, 80%)' };
     }
@@ -701,13 +704,15 @@ function autopilotStep(t, fc) {
 
   loadRocketOnEarth() {
     this.clear();
-    this.G = 1;
-    const earthRadius = 500;
+    this.paused = true;
+    this.G = 2.442e-7; // Realistic G for Earth=1.0 scale
+    
     const earthId = generateId();
+    const earthRadius = 1.0;
     this.bodies.push({
       id: earthId,
       name: 'Earth',
-      mass: 500000,
+      mass: 1.0,
       radius: earthRadius,
       color: 'hsl(210, 80%, 60%)',
       position: { x: 0, y: 0 },
@@ -715,26 +720,32 @@ function autopilotStep(t, fc) {
       trail: []
     });
 
+    this.creationTemplate = { presetType: 'rocket' };
+    const meta = this.getBodyMetadataFromPreset();
+    
     this.vehicle = {
       id: generateId(),
       name: 'Rocket',
-      mass: 1.0,
-      radius: 5,
-      color: 'white',
-      position: { x: 0, y: -earthRadius - 10 },
+      mass: meta.mass,
+      radius: meta.radius,
+      color: meta.color,
+      position: { x: 0, y: -earthRadius - meta.radius },
       velocity: { x: 0, y: 0 },
       trail: [],
       type: 'rocket',
-      rotation: 0,
+      rotation: -Math.PI / 2,
       angularVelocity: 0,
       isHeatProtected: false,
-      thrustPower: 0.05,
-      maxKineticEnergy: 50000
+      thrustPower: meta.thrustPower || 0.05,
+      maxKineticEnergy: meta.maxKineticEnergy || 50000
     };
+    
+    (this.vehicle as any).parentBodyId = earthId;
+    (this.vehicle as any).relativeOffset = { x: 0, y: -earthRadius - meta.radius };
     this.bodies.push(this.vehicle);
-
-    this.camera.followingId = earthId;
-    this.camera.zoom = 0.8;
+    
+    this.camera.followingId = this.vehicle.id;
+    this.camera.zoom = 2000000; // Ultra-high zoom for realistic scale rocket visibility
   }
 
   loadBlackHoleDevour() {
@@ -848,7 +859,7 @@ function autopilotStep(t, fc) {
         if (this.vehicle) {
           const v = this.vehicle;
           // Apply angular momentum
-          const torque = 2.0 / Math.max(1, this.timeScale);
+          const torque = 5.0 / Math.max(1, this.timeScale);
           if ((v as any).rotatingLeft) v.angularVelocity -= torque * stepDt;
           if ((v as any).rotatingRight) v.angularVelocity += torque * stepDt;
 
@@ -860,6 +871,7 @@ function autopilotStep(t, fc) {
 
           // Apply thrust
           if ((v as any).thrusting) {
+            (v as any).parentBodyId = null;
             // Keep the relative acceleration consistent regardless of mass
             const acceleration = v.thrustPower;
             v.velocity.x += Math.cos(v.rotation) * acceleration * stepDt;
@@ -949,6 +961,8 @@ function autopilotStep(t, fc) {
               if (this.vehicle && (b1.id === this.vehicle.id || b2.id === this.vehicle.id)) {
                 const vehicleBody = b1.id === this.vehicle.id ? b1 : b2;
                 const other = b1.id === this.vehicle.id ? b2 : b1;
+
+                if ((vehicleBody as any).parentBodyId === other.id) continue;
 
                 // If it's a black hole or extreme star, destroy rocket
                 if (this.isBodyBlackHole(other) || other.mass > 1000000) {

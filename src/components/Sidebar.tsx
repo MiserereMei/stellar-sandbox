@@ -201,14 +201,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
 
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">
-              {sim.isBodyBlackHole(body) ? 'Gravitational Throat' : 'Radius'}
+              {sim.isBodyBlackHole(body) ? 'Gravitational Throat' : ((body as any).type?.includes('rocket') ? 'Length' : 'Radius')}
             </span>
             <div className="flex items-center w-full bg-black/40 rounded-xl border border-white/5 overflow-hidden">
               <button 
                 disabled={sim.isBodyBlackHole(body)}
                 onClick={() => {
-                  const r = Math.max(1e-8, body.radius / 2);
-                  updateBody({ radius: r });
+                  const step = (body as any).type?.includes('rocket') ? (body.radius * 2 / 2) : (body.radius / 2);
+                  const r = Math.max(1e-15, step);
+                  updateBody({ radius: (body as any).type?.includes('rocket') ? r / 2 : r });
                   setRadiusUnit(getOptimalUnit(r, radiusUnits));
                 }} 
                 className={`px-2 py-2 text-[10px] font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-r border-white/5 shrink-0 ${sim.isBodyBlackHole(body) ? 'opacity-30 cursor-not-allowed' : ''}`}
@@ -217,10 +218,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
                 <input 
                   type="text"
                   disabled={sim.isBodyBlackHole(body)}
-                  value={(body.radius / radiusUnits[radiusUnit]).toExponential(2).replace('e+0', '')}
+                  value={((body as any).type?.includes('rocket') ? (body.radius * 2) : body.radius) / radiusUnits[radiusUnit]}
                   onChange={e => {
                     const val = parseFloat(e.target.value);
-                    if (!isNaN(val)) updateBody({ radius: val * radiusUnits[radiusUnit] });
+                    if (!isNaN(val)) {
+                      const finalR = (body as any).type?.includes('rocket') ? (val * radiusUnits[radiusUnit] / 2) : (val * radiusUnits[radiusUnit]);
+                      updateBody({ radius: finalR });
+                    }
                   }}
                   className={`font-mono text-[12px] text-white bg-transparent flex-1 text-right outline-none px-2 py-2 min-w-0 ${sim.isBodyBlackHole(body) ? 'text-blue-400 font-bold' : ''}`}
                 />
@@ -235,8 +239,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
               <button 
                 disabled={sim.isBodyBlackHole(body)}
                 onClick={() => {
-                  const r = body.radius * 2;
-                  updateBody({ radius: r });
+                  const r = (body as any).type?.includes('rocket') ? (body.radius * 2 * 2) : (body.radius * 2);
+                  updateBody({ radius: (body as any).type?.includes('rocket') ? r / 2 : r });
                   setRadiusUnit(getOptimalUnit(r, radiusUnits));
                 }} 
                 className={`px-2 py-2 text-[10px] font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-l border-white/5 shrink-0 ${sim.isBodyBlackHole(body) ? 'opacity-30 cursor-not-allowed' : ''}`}

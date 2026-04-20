@@ -6,6 +6,6 @@ export interface Vehicle extends Body {
   angularVelocity: number; // in rad/s
   isHeatProtected: boolean;
   thrustPower: number;
-  size: number;
+  length: number;
   maxKineticEnergy: number;
 }

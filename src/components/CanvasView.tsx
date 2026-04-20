@@ -990,14 +990,14 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           gridGraphics.stroke({ width: 1, color: "#ffffff", alpha: 0.05 });
         }
 
-        // Transform: Using floating origin to prevent jitter
-        // Container is centered, drawn objects use (pos - camera)
+        // Transform: Using manual Screen-Space Projection to prevent GPU precision clipping
+        // Containers are centered, but scale is kept at 1.0 to avoid driver-level float errors at extreme zoom.
         worldBgContainer.position.set(width / 2, height / 2);
-        worldBgContainer.scale.set(zoom);
+        worldBgContainer.scale.set(1.0);
         worldBgContainer.pivot.set(0, 0);
 
         worldFgContainer.position.copyFrom(worldBgContainer.position);
-        worldFgContainer.scale.copyFrom(worldBgContainer.scale);
+        worldFgContainer.scale.set(1.0);
         worldFgContainer.pivot.copyFrom(worldBgContainer.pivot);
 
         backgroundTrailsGraphics.clear();
@@ -1006,8 +1006,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         foregroundBodiesGraphics.clear();
 
         const activeLabels = new Set<string>();
-        const responsiveStrokeWidth = 1 / zoom; // Scales perfectly with zoom
-        const trailWidth = 1 / zoom;
+        const responsiveStrokeWidth = 2.0; // In Screen Pixels
+        const trailWidth = 1.5; // In Screen Pixels
 
         // Sort all bodies
         const sortedBodies = [...sim.bodies].sort((a, b) => {
@@ -1032,10 +1032,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             const len = b.trail.length;
             for (let i = 0; i < len - 1; i++) {
               const alpha = 0.4 * (i / len);
-              targetTrailsGraphics.moveTo(b.trail[i].x - cx, b.trail[i].y - cy);
+              targetTrailsGraphics.moveTo((b.trail[i].x - cx) * zoom, (b.trail[i].y - cy) * zoom);
               targetTrailsGraphics.lineTo(
-                b.trail[i + 1].x - cx,
-                b.trail[i + 1].y - cy,
+                (b.trail[i + 1].x - cx) * zoom,
+                (b.trail[i + 1].y - cy) * zoom,
               );
               targetTrailsGraphics.stroke({
                 width: trailWidth,
@@ -1044,10 +1044,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               });
             }
             targetTrailsGraphics.moveTo(
-              b.trail[len - 1].x - cx,
-              b.trail[len - 1].y - cy,
+              (b.trail[len - 1].x - cx) * zoom,
+              (b.trail[len - 1].y - cy) * zoom,
             );
-            targetTrailsGraphics.lineTo(b.position.x - cx, b.position.y - cy);
+            targetTrailsGraphics.lineTo((b.position.x - cx) * zoom, (b.position.y - cy) * zoom);
             targetTrailsGraphics.stroke({
               width: trailWidth,
               color: b.color,
@@ -1065,18 +1065,23 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             const baseX = refBody ? refBody.position.x : 0;
             const baseY = refBody ? refBody.position.y : 0;
 
-            targetTrailsGraphics.moveTo(b.position.x - cx, b.position.y - cy);
+            targetTrailsGraphics.moveTo((b.position.x - cx) * zoom, (b.position.y - cy) * zoom);
+            let drawing = true;
+            let segmentCounter = 0;
             for (let i = 0; i < len; i++) {
-              if (i % 2 === 0) {
-                targetTrailsGraphics.lineTo(
-                  baseX + b.projectedTrail[i].x - cx,
-                  baseY + b.projectedTrail[i].y - cy,
-                );
+              const px = (baseX + b.projectedTrail[i].x - cx) * zoom;
+              const py = (baseY + b.projectedTrail[i].y - cy) * zoom;
+              
+              if (drawing) {
+                targetTrailsGraphics.lineTo(px, py);
               } else {
-                targetTrailsGraphics.moveTo(
-                  baseX + b.projectedTrail[i].x - cx,
-                  baseY + b.projectedTrail[i].y - cy,
-                );
+                targetTrailsGraphics.moveTo(px, py);
+              }
+
+              segmentCounter++;
+              if (segmentCounter > 15) { // Dash every 15 points for visual consistency
+                segmentCounter = 0;
+                drawing = !drawing;
               }
             }
             targetTrailsGraphics.stroke({
@@ -1091,41 +1096,36 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             if (settingsRef.current.warpEnabled) {
               const orangeSteps = 15;
               for (let j = orangeSteps; j > 0; j--) {
-                const r = b.radius + b.radius * 0.4 * (j / orangeSteps);
-                if (r * zoom < 4096) {
+                const r = (b.radius + b.radius * 0.4 * (j / orangeSteps)) * zoom;
+                if (r < 16384) {
                   targetGraphics
-                    .circle(b.position.x - cx, b.position.y - cy, r)
+                    .circle((b.position.x - cx) * zoom, (b.position.y - cy) * zoom, r)
                     .fill({ color: "#ff6432", alpha: 0.04 });
                 }
               }
               const purpleSteps = 10;
               for (let j = purpleSteps; j > 0; j--) {
-                const r = b.radius + b.radius * 0.15 * (j / purpleSteps);
-                if (r * zoom < 4096) {
+                const r = (b.radius + b.radius * 0.15 * (j / purpleSteps)) * zoom;
+                if (r < 16384) {
                   targetGraphics
-                    .circle(b.position.x - cx, b.position.y - cy, r)
+                    .circle((b.position.x - cx) * zoom, (b.position.y - cy) * zoom, r)
                     .fill({ color: "#6432ff", alpha: 0.08 });
                 }
               }
-              if (b.radius * zoom < 4096) {
-                targetGraphics
-                  .circle(b.position.x - cx, b.position.y - cy, b.radius)
-                  .fill({ color: "#000000", alpha: 1.0 });
-              } else {
-                targetGraphics
-                  .circle(b.position.x - cx, b.position.y - cy, b.radius)
-                  .fill({ color: "#000000", alpha: 1.0 });
-              }
+              const horizonR = b.radius * zoom;
+              targetGraphics
+                .circle((b.position.x - cx) * zoom, (b.position.y - cy) * zoom, horizonR)
+                .fill({ color: "#000000", alpha: 1.0 });
             } else {
               targetGraphics
-                .circle(b.position.x - cx, b.position.y - cy, b.radius * 0.25)
+                .circle((b.position.x - cx) * zoom, (b.position.y - cy) * zoom, b.radius * 0.25 * zoom)
                 .fill({ color: "#ffffff", alpha: 1.0 });
               const glowSteps = 15;
               for (let j = glowSteps; j > 0; j--) {
-                const r = b.radius * (0.25 + 0.75 * (j / glowSteps));
-                if (r * zoom < 4096) {
+                const r = b.radius * (0.25 + 0.75 * (j / glowSteps)) * zoom;
+                if (r < 16384) {
                   targetGraphics
-                    .circle(b.position.x - cx, b.position.y - cy, r)
+                    .circle((b.position.x - cx) * zoom, (b.position.y - cy) * zoom, r)
                     .fill({ color: "#ffffff", alpha: 0.05 });
                 }
               }
@@ -1134,30 +1134,29 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             // Rocket rendering
             if (sim.vehicle && b.id === sim.vehicle.id) {
               const v = sim.vehicle;
-              // Ensure the rocket is visible (at least 3 pixels) but scale smoothly
-              // when zoomed in to avoid 'floating' or 'burying' artifacts.
-              const r = Math.max(b.radius, 3 / zoom);
+              const l_px = Math.max((v as any).length || b.radius * 2, 6 / zoom) * zoom;
+              const r_px = l_px / 2; 
 
               const rot = v.rotation;
               const cos = Math.cos(rot);
               const sin = Math.sin(rot);
 
-              // Realistic Rocket Shape: Pointed Nose and Aerodynamic Fins
+              // Realistic Rocket Shape: Screen space coordinates
               const pts = [
-                { x: 2.5, y: 0 }, // Nose Tip
-                { x: 0.8, y: 0.5 }, // Top Shoulder
-                { x: -1.2, y: 0.5 }, // Top Body Rear
-                { x: -2.0, y: 1.4 }, // Top Fin Tip
-                { x: -1.6, y: 0.5 }, // Top Fin Join
-                { x: -1.6, y: -0.5 }, // Bottom Fin Join
-                { x: -2.0, y: -1.4 }, // Bottom Fin Tip
-                { x: -1.2, y: -0.5 }, // Bottom Body Rear
-                { x: 0.8, y: -0.5 }, // Bottom Shoulder
+                { x: 1.0, y: 0 },    // Nose Tip
+                { x: 0.7, y: 0.15 }, // Fairing Shoulder
+                { x: -0.8, y: 0.15 },// Main Body End
+                { x: -1.0, y: 0.4 }, // Top Fin Tip
+                { x: -0.9, y: 0.15 },// Top Fin Join
+                { x: -0.9, y: -0.15 },// Bottom Fin Join
+                { x: -1.0, y: -0.4 },// Bottom Fin Tip
+                { x: -0.8, y: -0.15 },// Main Body End Bottom
+                { x: 0.7, y: -0.15 }, // Fairing Shoulder Bottom
               ];
 
               let polyPoints = pts.flatMap((p) => [
-                b.position.x - cx + (p.x * r * cos - p.y * r * sin),
-                b.position.y - cy + (p.x * r * sin + p.y * r * cos),
+                (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
               ]);
 
               // Apply warp (Relative)
@@ -1194,13 +1193,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               // Thrust fire
               if ((v as any).thrusting) {
                 const firePts = [
-                  { x: -1.6, y: 0.4 },
-                  { x: -4.0, y: 0 },
-                  { x: -1.6, y: -0.4 },
+                  { x: -0.9, y: 0.12 },
+                  { x: -3.0, y: 0 },
+                  { x: -0.9, y: -0.12 },
                 ];
                 let fPoly = firePts.flatMap((p) => [
-                  b.position.x - cx + (p.x * r * cos - p.y * r * sin),
-                  b.position.y - cy + (p.x * r * sin + p.y * r * cos),
+                  (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                  (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
                 ]);
 
                 // Apply warp to fire too (Relative)
@@ -1235,13 +1234,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                   .fill({ color: "#ff4b00", alpha: 0.8 });
 
                 const corePts = [
-                  { x: -1.6, y: 0.2 },
-                  { x: -2.8, y: 0 },
-                  { x: -1.6, y: -0.2 },
+                  { x: -0.9, y: 0.08 },
+                  { x: -2.0, y: 0 },
+                  { x: -0.9, y: -0.08 },
                 ];
                 let cPoly = corePts.flatMap((p) => [
-                  b.position.x - cx + (p.x * r * cos - p.y * r * sin),
-                  b.position.y - cy + (p.x * r * sin + p.y * r * cos),
+                  (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                  (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
                 ]);
 
                 // Apply warp to fire core (Relative)
@@ -1280,15 +1279,20 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               const screenRadius = b.radius * zoom;
               let segments = 32;
               if (screenRadius < 3)
-                segments = 12; // Far away: Simple but not a triangle
+                segments = 12; // Far away
+              else if (screenRadius > 2000)
+                segments = 2048; // Ultra-high zoom (Horizon view)
+              else if (screenRadius > 1000)
+                segments = 512; // Very close
               else if (screenRadius > 300)
-                segments = 128; // Close up: Ultra-smooth
-              else if (screenRadius > 100) segments = 64; // Mid-zoom: High fidelity
+                segments = 128; // Close up
+              else if (screenRadius > 100)
+                segments = 64; // Mid-zoom
 
               const polyPoints = generateCirclePoints(
-                b.position.x - cx,
-                b.position.y - cy,
-                b.radius,
+                (b.position.x - cx) * zoom,
+                (b.position.y - cy) * zoom,
+                b.radius * zoom,
                 segments,
               );
               targetGraphics
@@ -1303,9 +1307,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           if (isHovered) {
             // Dynamic Stroke Scaling for hovered/selected bodies
             if (sim.isBodyBlackHole(b)) {
-              if (b.radius * zoom < 4096) {
+              if (b.radius * zoom < 16384) {
                 targetGraphics
-                  .circle(b.position.x - cx, b.position.y - cy, b.radius)
+                  .circle((b.position.x - cx) * zoom, (b.position.y - cy) * zoom, b.radius * zoom)
                   .stroke({
                     width: responsiveStrokeWidth,
                     color: "#ff3232",
@@ -1313,25 +1317,25 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                   });
               }
             } else {
-              if (b.radius * zoom < 4096) {
+              if (b.radius * zoom < 16384) {
                 targetGraphics
-                  .circle(b.position.x - cx, b.position.y - cy, b.radius)
+                  .circle((b.position.x - cx) * zoom, (b.position.y - cy) * zoom, b.radius * zoom)
                   .stroke({
                     width: responsiveStrokeWidth,
-                    color: "#ffffff",
+                    color: "#32aaff",
                     alpha: 0.8,
                   });
               }
             }
 
             if (b.id === sim.selectedBodyId) {
-              targetGraphics.moveTo(b.position.x - cx, b.position.y - cy);
+              targetGraphics.moveTo((b.position.x - cx) * zoom, (b.position.y - cy) * zoom);
               targetGraphics.lineTo(
-                b.position.x - cx + b.velocity.x * 2,
-                b.position.y - cy + b.velocity.y * 2,
+                (b.position.x - cx + b.velocity.x * 2) * zoom,
+                (b.position.y - cy + b.velocity.y * 2) * zoom,
               );
               targetGraphics.stroke({
-                width: 1 / zoom,
+                width: 1.5,
                 color: "#ffffff",
                 alpha: 0.4,
               });
