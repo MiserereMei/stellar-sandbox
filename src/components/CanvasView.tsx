@@ -1433,8 +1433,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             }
 
             txt.alpha = 0.7;
-            txt.position.set(targetPos.x, targetPos.y - b.radius - 4 / zoom);
-            txt.scale.set(1 / zoom);
+            txt.position.set(targetPos.x * zoom, (targetPos.y - b.radius) * zoom - 4);
+            txt.scale.set(1);
           }
         }
 
@@ -1504,10 +1504,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           }
           rtxt.text = distLabel;
           rtxt.position.set(
-            (start.x - cx + (end.x - cx)) / 2,
-            (start.y - cy + (end.y - cy)) / 2 + 10 / zoom,
+            (start.x - cx + (end.x - cx)) / 2 * zoom,
+            (start.y - cy + (end.y - cy)) / 2 * zoom + 10,
           );
-          rtxt.scale.set(1 / zoom);
+          rtxt.scale.set(1);
           activeLabels.add(rulerTextId);
         }
 
@@ -1517,15 +1517,15 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             sim.creationTemplate.presetType === "heatProtectedRocket";
 
           uiGraphics.moveTo(
-            sim.previewVelocityVector.start.x - cx,
-            sim.previewVelocityVector.start.y - cy,
+            (sim.previewVelocityVector.start.x - cx) * zoom,
+            (sim.previewVelocityVector.start.y - cy) * zoom,
           );
           uiGraphics.lineTo(
-            sim.previewVelocityVector.end.x - cx,
-            sim.previewVelocityVector.end.y - cy,
+            (sim.previewVelocityVector.end.x - cx) * zoom,
+            (sim.previewVelocityVector.end.y - cy) * zoom,
           );
           uiGraphics.stroke({
-            width: 1 / zoom,
+            width: 1,
             color: isVehicle ? "#64ffc8" : "#ff6464",
             alpha: 0.8,
           });
@@ -1539,25 +1539,25 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             );
             const r = 4;
             const p1 = {
-              x: sim.previewVelocityVector.start.x - cx + Math.cos(angle) * r * 1.5,
-              y: sim.previewVelocityVector.start.y - cy + Math.sin(angle) * r * 1.5,
+              x: (sim.previewVelocityVector.start.x - cx) * zoom + Math.cos(angle) * r * 1.5,
+              y: (sim.previewVelocityVector.start.y - cy) * zoom + Math.sin(angle) * r * 1.5,
             };
             const p2 = {
-              x: sim.previewVelocityVector.start.x - cx + Math.cos(angle + 2.5) * r,
-              y: sim.previewVelocityVector.start.y - cy + Math.sin(angle + 2.5) * r,
+              x: (sim.previewVelocityVector.start.x - cx) * zoom + Math.cos(angle + 2.5) * r,
+              y: (sim.previewVelocityVector.start.y - cy) * zoom + Math.sin(angle + 2.5) * r,
             };
             const p3 = {
-              x: sim.previewVelocityVector.start.x - cx + Math.cos(angle - 2.5) * r,
-              y: sim.previewVelocityVector.start.y - cy + Math.sin(angle - 2.5) * r,
+              x: (sim.previewVelocityVector.start.x - cx) * zoom + Math.cos(angle - 2.5) * r,
+              y: (sim.previewVelocityVector.start.y - cy) * zoom + Math.sin(angle - 2.5) * r,
             };
             uiGraphics
               .poly([p1.x, p1.y, p2.x, p2.y, p3.x, p3.y])
               .fill({ color: "#ffffff", alpha: 0.8 });
           } else {
             uiGraphics.circle(
-              sim.previewVelocityVector.start.x - cx,
-              sim.previewVelocityVector.start.y - cy,
-              8 / zoom,
+              (sim.previewVelocityVector.start.x - cx) * zoom,
+              (sim.previewVelocityVector.start.y - cy) * zoom,
+              8,
             );
             uiGraphics.fill({ color: "#ffffff", alpha: 0.5 });
           }
@@ -1572,18 +1572,18 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             const dy = sim.orbitPreview.mousePos.y - parent.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist * zoom < 4096) {
-              uiGraphics.circle(parent.position.x - cx, parent.position.y - cy, dist);
+              uiGraphics.circle((parent.position.x - cx) * zoom, (parent.position.y - cy) * zoom, dist * zoom);
               uiGraphics.stroke({
-                width: 1 / zoom,
+                width: 1,
                 color: "#64c8ff",
                 alpha: 0.4,
               });
             }
 
             uiGraphics.circle(
-              sim.orbitPreview.mousePos.x - cx,
-              sim.orbitPreview.mousePos.y - cy,
-              5 / zoom,
+              (sim.orbitPreview.mousePos.x - cx) * zoom,
+              (sim.orbitPreview.mousePos.y - cy) * zoom,
+              5,
             );
             uiGraphics.fill({ color: "#64c8ff", alpha: 0.8 });
           }
