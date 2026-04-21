@@ -83,7 +83,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="w-screen h-screen bg-[var(--color-bg-deep)] text-[var(--color-text-main)] font-sans overflow-hidden flex flex-col selection:bg-[var(--color-accent-blue)]/30 relative">
+    <div className={`w-screen h-screen bg-[var(--color-bg-deep)] text-[var(--color-text-main)] font-sans overflow-hidden flex flex-col selection:bg-[var(--color-accent-blue)]/30 relative${streamingMode ? ' streaming-mode' : ''}`}>
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden w-full relative">
         {/* Viewport */}

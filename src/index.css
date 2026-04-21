@@ -12,3 +12,13 @@
   --font-sans: "Inter", -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", "Courier New", monospace;
 }
+
+html, body {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+.streaming-mode * {
+  cursor: none !important;
+}

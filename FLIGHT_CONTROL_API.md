@@ -48,6 +48,13 @@ interface CelestialBody {
 }
 ```
 
+## Mission Control & Sequencing
+
+| Method | Description | Units |
+| :--- | :--- | :--- |
+| `fc.setLaunchTime(startTime)` | Schedules a T-0 launch sequence. HUD counts down and calls `onLaunch(fc)` exactly at T-0. | Seconds |
+| `fc.igniteBooster(thrust, burnTime, onBurnout)` | Fires solid rocket boosters (SRBs) adding raw physical force. `onBurnout(fc)` is triggered when fuel runs out. | Newtons, Seconds |
+
 ## Utility
 
 | Method | Description |

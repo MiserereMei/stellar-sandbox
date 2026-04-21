@@ -445,7 +445,11 @@ export class Simulation {
   public isAutopilotActive = false;
   public missionTime = 0;
   public currentScript = '';
+  public targetLaunchTime: number | null = null;
+  public launchEpoch: number | null = null;
+  public activeBoosters: { thrust: number, endTime: number, onBurnout?: () => void }[] = [];
   private autopilotStepFn: any = null;
+  private onLaunchFn: any = null;
   public autopilotLog: (msg: string) => void = () => { };
 
   getCurrentDate(): Date {
@@ -572,10 +576,12 @@ export class Simulation {
             ${script}
             return { 
                 flightPlan: typeof flightPlan !== 'undefined' ? flightPlan : [], 
-                autopilotStep: typeof autopilotStep !== 'undefined' ? autopilotStep : null 
+                autopilotStep: typeof autopilotStep !== 'undefined' ? autopilotStep : null,
+                onLaunch: typeof onLaunch !== 'undefined' ? onLaunch : null
             };
         `)();
-      this.autopilotStepFn = result.autopilotStep;
+    this.autopilotStepFn = result.autopilotStep;
+      this.onLaunchFn = result.onLaunch || null;
       this.isAutopilotActive = true;
     } catch (err: any) {
       throw new Error("Script Compilation Error: " + err.message);
@@ -585,6 +591,10 @@ export class Simulation {
   stopAutopilot() {
     this.isAutopilotActive = false;
     this.autopilotStepFn = null;
+    this.onLaunchFn = null;
+    this.targetLaunchTime = null;
+    this.launchEpoch = null;
+    this.activeBoosters = [];
     if (this.vehicle) {
       (this.vehicle as any).thrusting = false;
       (this.vehicle as any).rotatingLeft = false;
@@ -728,6 +738,7 @@ function autopilotStep(t, fc) {
       name: 'Rocket',
       mass: meta.mass,
       radius: meta.radius,
+      length: meta.length || meta.radius * 2,
       color: meta.color,
       position: { x: 0, y: -earthRadius - meta.radius },
       velocity: { x: 0, y: 0 },
@@ -845,8 +856,34 @@ function autopilotStep(t, fc) {
               const b = this.bodies.find(body => body.id === id);
               return b ? formatBody(b) : null;
             },
+            setLaunchTime: (startTime: number) => {
+              this.targetLaunchTime = startTime;
+              this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${startTime}s`);
+            },
+            setLaunchSchedule: (startTime: number) => { // alias for setLaunchTime
+              this.targetLaunchTime = startTime;
+              this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${startTime}s`);
+            },
+            igniteBooster: (thrustNewtons: number, burnTimeSeconds: number, onBurnout?: () => void) => {
+              this.activeBoosters.push({
+                  thrust: thrustNewtons,
+                  endTime: this.missionTime + burnTimeSeconds,
+                  onBurnout
+              });
+              this.autopilotLog(`BOOSTER IGNITION: ${(thrustNewtons / 1e6).toFixed(1)} MN for ${burnTimeSeconds}s`);
+            },
             log: (msg: string) => this.autopilotLog(msg)
           };
+
+          // Check if we've reached the scheduled launch time
+          if (this.targetLaunchTime !== null && this.missionTime >= this.targetLaunchTime) {
+            this.launchEpoch = this.missionTime; // Record exact T-0
+            this.autopilotLog(`T-0! Launch sequence initiated at T+${this.missionTime.toFixed(1)}s`);
+            if (this.onLaunchFn) {
+              try { this.onLaunchFn(fc); } catch (err: any) { this.autopilotLog('onLaunch Error: ' + err.message); }
+            }
+            this.targetLaunchTime = null; // fire once
+          }
           try {
             this.autopilotStepFn(this.missionTime, fc);
           } catch (err: any) {
@@ -870,12 +907,39 @@ function autopilotStep(t, fc) {
 
 
           // Apply thrust
+          let totalAcceleration = 0;
           if ((v as any).thrusting) {
+            totalAcceleration += v.thrustPower;
+          }
+
+          // Apply booster thrusts
+          if (this.activeBoosters && this.activeBoosters.length > 0) {
+            const METER_PER_UNIT = 6371000;
+            const KG_PER_UNIT_MASS = 5.972e24;
+            const vehicleMassKg = v.mass * KG_PER_UNIT_MASS;
+            
+            for (let i = this.activeBoosters.length - 1; i >= 0; i--) {
+                const b = this.activeBoosters[i];
+                if (this.missionTime >= b.endTime) {
+                    if (b.onBurnout) {
+                        try { b.onBurnout(); } catch(e: any) { this.autopilotLog('onBurnout Error: ' + e.message); }
+                    }
+                    this.activeBoosters.splice(i, 1);
+                } else {
+                    const a_meters = b.thrust / vehicleMassKg;
+                    const a_sim = a_meters / METER_PER_UNIT;
+                    totalAcceleration += a_sim;
+                }
+            }
+          }
+
+          if (totalAcceleration > 0) {
             (v as any).parentBodyId = null;
-            // Keep the relative acceleration consistent regardless of mass
-            const acceleration = v.thrustPower;
-            v.velocity.x += Math.cos(v.rotation) * acceleration * stepDt;
-            v.velocity.y += Math.sin(v.rotation) * acceleration * stepDt;
+            (v as any).isLaunchingOrThrusting = true;
+            v.velocity.x += Math.cos(v.rotation) * totalAcceleration * stepDt;
+            v.velocity.y += Math.sin(v.rotation) * totalAcceleration * stepDt;
+          } else {
+            (v as any).isLaunchingOrThrusting = false;
           }
         }
 
@@ -975,7 +1039,7 @@ function autopilotStep(t, fc) {
                   const relVy = vehicleBody.velocity.y - other.velocity.y;
                   const relSpeedSq = relVx * relVx + relVy * relVy;
 
-                  if ((vehicleBody as any).thrusting) {
+                  if ((vehicleBody as any).isLaunchingOrThrusting) {
                     // Launching: only depenetrate if sinking in, otherwise fly free
                     const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
                     const nx = Math.cos(angle), ny = Math.sin(angle);

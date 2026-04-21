@@ -19,10 +19,12 @@ function fmtSpeed(simUnits: number): string {
 }
 
 function fmtTime(seconds: number): string {
+  const neg = seconds < 0;
   const s = Math.floor(Math.abs(seconds));
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
-  return `T+${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const prefix = neg ? 'T-' : 'T+';
+  return `${prefix}${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
 interface StatBlockProps {
@@ -51,17 +53,30 @@ export const StreamingHUD: React.FC<StreamingHUDProps> = ({ sim, isStreaming, au
   const [tick, setTick] = useState(0);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
+  // Always tick so the display is live from the moment streaming starts
   useEffect(() => {
-    if (!isStreaming) return;
-    const id = setInterval(() => setTick(t => t + 1), 150);
+    const id = setInterval(() => setTick(t => t + 1), 100);
     return () => clearInterval(id);
-  }, [isStreaming]);
+  }, []);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [autopilotLogs]);
 
   if (!isStreaming) return null;
+
+  // Display time logic:
+  // 1. Countdown:   targetLaunchTime set      → show missionTime - targetLaunchTime (negative)
+  // 2. Post-launch: launchEpoch set            → show missionTime - launchEpoch (0, 1, 2...)
+  // 3. No schedule: neither set               → show raw missionTime
+  const launchTarget = sim.targetLaunchTime;
+  const launchEpoch  = sim.launchEpoch;
+  const isCountdown  = launchTarget !== null && sim.missionTime < launchTarget;
+  const displayTime  = launchTarget !== null
+    ? sim.missionTime - launchTarget       // T-minus (negative)
+    : launchEpoch !== null
+      ? sim.missionTime - launchEpoch      // T+post-launch (from 0)
+      : sim.missionTime;                   // raw clock
 
   const alt    = sim.vehicle ? sim.getAltitude() : null;
   const vspeed = sim.vehicle ? sim.getRadialSpeed() : null;
@@ -79,10 +94,6 @@ export const StreamingHUD: React.FC<StreamingHUDProps> = ({ sim, isStreaming, au
       {isStreaming && (
         <motion.div
           key="streaming-hud"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.6 }}
           className="fixed inset-0 z-[200] pointer-events-none select-none"
           style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" }}
         >
@@ -102,7 +113,13 @@ export const StreamingHUD: React.FC<StreamingHUDProps> = ({ sim, isStreaming, au
             <div className="flex items-center gap-3">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-emerald-400 text-[11px] font-bold tracking-[3px] uppercase">STREAMING</span>
-              <span className="text-white/40 text-[11px] tracking-widest ml-2">{fmtTime(sim.missionTime)}</span>
+              <span
+                className={`text-[11px] tracking-widest ml-2 font-mono font-bold transition-colors ${
+                  isCountdown ? 'text-amber-400 animate-pulse' : 'text-white/40'
+                }`}
+              >
+                {fmtTime(displayTime)}
+              </span>
             </div>
 
             {/* Vehicle name */}
