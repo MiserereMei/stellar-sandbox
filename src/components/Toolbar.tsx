@@ -21,13 +21,15 @@ interface ToolbarProps {
   setVisualSettings: (settings: VisualSettings) => void;
   showAutopilot: boolean;
   setShowAutopilot: (val: boolean) => void;
+  streamingMode: boolean;
+  setStreamingMode: (val: boolean) => void;
   apiKey: string;
   setApiKey: (val: string) => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   sim, toolMode, setToolMode, addMode, setAddMode, creationPreset, setCreationPreset, activePopUp, setActivePopUp, visualSettings, setVisualSettings,
-  showAutopilot, setShowAutopilot, apiKey, setApiKey
+  showAutopilot, setShowAutopilot, streamingMode, setStreamingMode, apiKey, setApiKey
 }) => {
   const [paused, setPaused] = useState(sim.paused);
   const [timeScale, setTimeScale] = useState(sim.timeScale);
@@ -746,6 +748,24 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 />
               </label>
             ))}
+
+            {/* Streaming Mode Toggle */}
+            <div className="pt-2 mt-1 border-t border-white/10">
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Streaming Mode</div>
+              <button
+                onClick={() => setStreamingMode(!streamingMode)}
+                className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                  streamingMode
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                    : 'border-white/10 bg-white/5 text-gray-400 hover:text-white'
+                }`}
+              >
+                <span className="text-[10px] uppercase tracking-wide font-medium">
+                  {streamingMode ? '● LIVE' : 'Enable'}
+                </span>
+                <span className="text-[8px] text-white/20 font-mono">Ctrl+Shift+S</span>
+              </button>
+            </div>
 
             <div className="pt-2 mt-1 border-t border-white/10 flex flex-col gap-2">
               <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">AstroForge AI Config</div>

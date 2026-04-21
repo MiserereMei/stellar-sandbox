@@ -5,10 +5,11 @@ import { X } from 'lucide-react';
 
 interface AutopilotConsoleProps {
   sim: Simulation;
+  onAddLog?: (msg: string) => void;
   onClose: () => void;
 }
 
-export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, onClose }) => {
+export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, onAddLog, onClose }) => {
   const [script, setScript] = useState(sim.currentScript);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, onClose
 
   const addLog = (msg: string) => {
     setLogs(prev => [...prev.slice(-49), { time: sim.missionTime, msg }]);
+    onAddLog?.(msg);
   };
 
   return (
