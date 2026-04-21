@@ -809,20 +809,58 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(JSON.stringify(sim.bodies.map(b => ({ ...b, trail: [] }))));
-                    alert('Scenario exported to clipboard!');
+                    alert('Scenario JSON exported to clipboard!');
                   }}
                   className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-1.5 rounded transition-colors"
-                >Export</button>
+                >Export JSON</button>
                 <button
                   onClick={() => {
-                    const data = prompt('Paste scenario data:');
+                    const exportData = {
+                      bodies: sim.bodies.map(b => ({ ...b, trail: [] })),
+                      script: sim.currentScript,
+                      camera: {
+                        x: sim.camera.x,
+                        y: sim.camera.y,
+                        zoom: sim.camera.zoom,
+                        followingId: sim.camera.followingId
+                      }
+                    };
+                    const json = JSON.stringify(exportData);
+                    const base64 = btoa(unescape(encodeURIComponent(json)));
+                    window.history.replaceState(null, '', '#' + base64);
+                    navigator.clipboard.writeText(window.location.href);
+                    alert('Shareable URL generated and copied to clipboard!');
+                  }}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-1.5 rounded transition-colors"
+                >Export URL</button>
+                <button
+                  onClick={() => {
+                    const data = prompt('Paste scenario data or URL:');
                     if (data) {
                       try {
-                        const parsed = JSON.parse(data);
-                        if (Array.isArray(parsed)) {
-                          sim.clear();
-                          sim.bodies = parsed;
+                        let jsonStr = data;
+                        if (data.includes('#')) {
+                          const base64 = data.split('#')[1];
+                          jsonStr = decodeURIComponent(escape(atob(base64)));
                         }
+                        const parsed = JSON.parse(jsonStr);
+                        sim.clear();
+                        if (Array.isArray(parsed)) {
+                          // Old format (just bodies)
+                          sim.bodies = parsed;
+                        } else if (parsed.bodies) {
+                          // New format (bodies + script + camera)
+                          sim.bodies = parsed.bodies;
+                          if (parsed.script) sim.currentScript = parsed.script;
+                          if (parsed.camera) {
+                            sim.camera.x = parsed.camera.x || 0;
+                            sim.camera.y = parsed.camera.y || 0;
+                            sim.camera.zoom = parsed.camera.zoom || 1;
+                            sim.camera.followingId = parsed.camera.followingId || null;
+                          }
+                        }
+                        const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
+                        if (v) sim.vehicle = v as any;
                       } catch (e) {
                         alert('Invalid scenario data');
                       }

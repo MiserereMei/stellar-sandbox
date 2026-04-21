@@ -43,6 +43,34 @@ export default function App() {
     setAutopilotLogs(prev => [...prev.slice(-99), { time: sim.missionTime, msg }]);
   }, [sim]);
 
+  // Auto-load from URL
+  useEffect(() => {
+    if (window.location.hash && window.location.hash.length > 1) {
+      try {
+        const base64 = window.location.hash.substring(1);
+        const jsonStr = decodeURIComponent(escape(atob(base64)));
+        const parsed = JSON.parse(jsonStr);
+        sim.clear();
+        if (Array.isArray(parsed)) {
+          sim.bodies = parsed;
+        } else if (parsed.bodies) {
+          sim.bodies = parsed.bodies;
+          if (parsed.script) sim.currentScript = parsed.script;
+          if (parsed.camera) {
+            sim.camera.x = parsed.camera.x || 0;
+            sim.camera.y = parsed.camera.y || 0;
+            sim.camera.zoom = parsed.camera.zoom || 1;
+            sim.camera.followingId = parsed.camera.followingId || null;
+          }
+        }
+        const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
+        if (v) sim.vehicle = v as any;
+      } catch (e) {
+        console.error("Failed to auto-load scenario from URL", e);
+      }
+    }
+  }, [sim]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
