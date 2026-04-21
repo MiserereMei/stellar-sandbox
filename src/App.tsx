@@ -41,6 +41,13 @@ export default function App() {
 
   const addAutopilotLog = useCallback((msg: string) => {
     setAutopilotLogs(prev => [...prev.slice(-99), { time: sim.missionTime, msg }]);
+    // Use console.debug (Verbose) level so it doesn't clutter the main console
+    // You can see these by enabling 'Verbose' in your DevTools console filter
+    console.debug(
+      `%c${sim.missionTime.toFixed(1)}s: %c${msg}`,
+      "color: #6366f1; font-weight: bold;",
+      "color: #10b981;"
+    );
   }, [sim]);
 
   // Auto-load from URL
@@ -171,6 +178,7 @@ export default function App() {
                 <AutopilotConsole
                   key="autopilot"
                   sim={sim}
+                  logs={autopilotLogs}
                   onAddLog={addAutopilotLog}
                   onClose={() => setShowAutopilot(false)}
                 />

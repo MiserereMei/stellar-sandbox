@@ -945,7 +945,7 @@ function autopilotStep(t, fc) {
         if (this.vehicle) {
           const v = this.vehicle;
           // Apply angular momentum
-          const torque = 5.0 / Math.max(1, this.timeScale);
+          const torque = this.isAutopilotActive ? 5.0 : 5.0 / Math.max(1, this.timeScale);
           if ((v as any).rotatingLeft) v.angularVelocity -= torque * stepDt;
           if ((v as any).rotatingRight) v.angularVelocity += torque * stepDt;
 
