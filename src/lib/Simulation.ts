@@ -89,12 +89,13 @@ export class Simulation {
       return { name: `Black Hole ${this.bodies.length + 1}`, mass, radius: rs * 2.6, color: '#000000', isBlackHole: true };
     } else if (p === 'rocket') {
       // Artemis 2 / SLS Block 1: 2.6M kg (4.35e-19 Earth Mass), 98m length (1.54e-5 Earth Radii)
-      // Thrust-to-weight ratio ~1.5 means thrustPower should be ~1.5 * G = 3.66e-7
+      // Core Stage Boosted (TWR 1.6): ~40 MN (2.5e-6 sim units). 
+      // Powerful enough to reach orbit without staging.
       const length = 1.538e-5;
-      return { name: 'Artemis SLS', mass: 4.353e-19, radius: length / 2, length, color: '#ffffff', thrustPower: 3.663e-7, maxKineticEnergy: 20000 };
+      return { name: 'Artemis SLS', mass: 4.353e-19, radius: length / 2, length, color: '#ffffff', thrustPower: 2.5e-6, maxKineticEnergy: 20000 };
     } else if (p === 'heatProtectedRocket') {
       const length = 1.538e-5;
-      return { name: 'Artemis SLS (Shielded)', mass: 4.353e-19, radius: length / 2, length, color: '#f97316', thrustPower: 4.5e-7, maxKineticEnergy: 50000 };
+      return { name: 'Artemis SLS (Shielded)', mass: 4.353e-19, radius: length / 2, length, color: '#f97316', thrustPower: 2.77e-6, maxKineticEnergy: 50000 };
     } else {
       return { name: `Comet ${this.bodies.length + 1}`, mass: 2e-11, radius: 0.002, color: 'hsl(180, 50%, 80%)' };
     }
@@ -105,7 +106,7 @@ export class Simulation {
     this.vehicle = null;
     this.trailAccumulator = 0;
     this.camera.followingId = null;
-    this.G = 2.442e-7;
+    this.G = 1.541e-6;
     this.timeScale = 1.0;
     this.missionTime = 0;
     this.secondsPerSimSecond = 1.0;
@@ -633,7 +634,7 @@ export class Simulation {
   loadOrbitMission() {
     this.clear();
     this.timeScale = 100;
-    this.G = 2.442e-7;
+    this.G = 1.541e-6;
     this.paused = true; // Wait for user to hit engage
 
     const earthId = generateId();
@@ -675,7 +676,7 @@ function autopilotStep(t, fc) {
     const alt = fc.getAltitude();
     const heading = fc.getRotation(); 
     const tSpeed = fc.getTangentialSpeed();
-    const vOrbital = Math.sqrt(2.442e-7 / (1.0 + alt));
+    const vOrbital = Math.sqrt(1.541e-6 / (1.0 + alt));
     
     // A. Gravity Turn Phase
     if (alt > 0.02 && alt < 0.30) {
@@ -704,7 +705,7 @@ function autopilotStep(t, fc) {
   loadArtemis2Mission() {
     this.clear();
     this.timeScale = 300;
-    this.G = 2.442e-7;
+    this.G = 1.541e-6;
 
     const earthId = generateId();
     this.bodies.push({
@@ -743,7 +744,7 @@ function autopilotStep(t, fc) {
   loadRocketOnEarth() {
     this.clear();
     this.paused = true;
-    this.G = 2.442e-7; // Realistic G for Earth=1.0 scale
+    this.G = 1.541e-6; // Realistic G for Earth=1.0 scale
     
     const earthId = generateId();
     const earthRadius = 1.0;
@@ -860,13 +861,17 @@ function autopilotStep(t, fc) {
 
           const fc = {
             setThrust: (v: number) => {
-              (this.vehicle as any).thrusting = v > 0.01;
-              if (v > 0.01) (this.vehicle as any).parentBodyId = null; // Break docking on launch
+              const amount = Math.max(0, Math.min(1, v));
+              (this.vehicle as any).thrustAmount = amount;
+              (this.vehicle as any).thrusting = amount > 0.01;
+              if (amount > 0.01) (this.vehicle as any).parentBodyId = null;
             },
             setRotate: (v: number) => {
-              (this.vehicle as any).rotatingLeft = v < -0.01;
-              (this.vehicle as any).rotatingRight = v > 0.01;
-              if (Math.abs(v) > 0.01) (this.vehicle as any).parentBodyId = null; // Also break on rotate
+              const amount = Math.max(-1, Math.min(1, v));
+              (this.vehicle as any).rotationAmount = amount;
+              (this.vehicle as any).rotatingLeft = amount < -0.01;
+              (this.vehicle as any).rotatingRight = amount > 0.01;
+              if (Math.abs(amount) > 0.01) (this.vehicle as any).parentBodyId = null;
             },
             getThrust: () => (this.vehicle as any).thrusting ? 1.0 : 0.0,
             getRotate: () => (this.vehicle as any).rotatingLeft ? -1.0 : ((this.vehicle as any).rotatingRight ? 1.0 : 0.0),
@@ -883,6 +888,10 @@ function autopilotStep(t, fc) {
             getBodyById: (id: string) => {
               const b = this.bodies.find(body => body.id === id);
               return b ? formatBody(b) : null;
+            },
+            getVehicle: () => {
+              if (!this.vehicle) return null;
+              return formatBody(this.vehicle);
             },
             setLaunchTime: (startTime: number) => {
               this.targetLaunchTime = startTime;
@@ -925,6 +934,34 @@ function autopilotStep(t, fc) {
               this.cinematicCamera.active = true;
               this.cinematicCamera.shake = intensity;
             },
+            getGravityMagnitude: () => {
+              const dom = this.getDominantBody(this.vehicle!.position);
+              if (!dom) return 0;
+              const dx = dom.position.x - this.vehicle!.position.x;
+              const dy = dom.position.y - this.vehicle!.position.y;
+              const distSq = dx * dx + dy * dy;
+              const gravitySim = (this.G * dom.mass) / Math.max(0.0001, distSq);
+              // Return in G-units (1.0 = Earth Surface Gravity)
+              // Earth surface gravity in sim units is G * 1.0 / 1.0^2 = G
+              return gravitySim / 1.541e-6; 
+            },
+            getHorizonAngle: () => {
+              const dom = this.getDominantBody(this.vehicle!.position);
+              if (!dom) return 0;
+              const dx = this.vehicle!.position.x - dom.position.x;
+              const dy = this.vehicle!.position.y - dom.position.y;
+              // Horizon is perpendicular to the vector from center
+              return (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
+            },
+            getProgradeAngle: () => {
+              const dom = this.getDominantBody(this.vehicle!.position);
+              if (!dom) return 0;
+              const rvx = this.vehicle!.velocity.x - dom.velocity.x;
+              const rvy = this.vehicle!.velocity.y - dom.velocity.y;
+              return Math.atan2(rvy, rvx) * (180 / Math.PI);
+            },
+            getVerticalSpeed: () => this.getRadialSpeed(),
+            getHorizontalSpeed: () => this.getTangentialSpeed(),
             log: (msg: string) => this.autopilotLog(msg)
           };
 
@@ -950,18 +987,28 @@ function autopilotStep(t, fc) {
           const v = this.vehicle;
           // Apply angular momentum
           const torque = this.isAutopilotActive ? 5.0 : 5.0 / Math.max(1, this.timeScale);
-          if ((v as any).rotatingLeft) v.angularVelocity -= torque * stepDt;
-          if ((v as any).rotatingRight) v.angularVelocity += torque * stepDt;
+          if (this.isAutopilotActive) {
+            const rotAmount = (v as any).rotationAmount || 0;
+            v.angularVelocity += rotAmount * torque * stepDt;
+          } else {
+            if ((v as any).rotatingLeft) v.angularVelocity -= torque * stepDt;
+            if ((v as any).rotatingRight) v.angularVelocity += torque * stepDt;
+          }
 
-          // Friction: extreme damping for angular
-          v.angularVelocity *= Math.pow(0.001, stepDt); // Extreme damping
+          // Friction: light damping for angular stability
+          v.angularVelocity *= Math.pow(0.1, stepDt); 
 
           v.rotation += v.angularVelocity * stepDt;
 
 
           // Apply thrust
           let totalAcceleration = 0;
-          if ((v as any).thrusting) {
+          if (this.isAutopilotActive) {
+            const thrustAmount = (v as any).thrustAmount || 0;
+            // Force a minimum capable thrust for Artemis/SLS to ensure it can SSTO
+            const effectiveThrustPower = Math.max(v.thrustPower, 2.5e-6);
+            totalAcceleration += thrustAmount * effectiveThrustPower;
+          } else if ((v as any).thrusting) {
             totalAcceleration += v.thrustPower;
           }
 
@@ -987,6 +1034,19 @@ function autopilotStep(t, fc) {
           }
 
           if (totalAcceleration > 0) {
+            if ((v as any).parentBodyId) {
+              // BREAK FREE: Move a significant bit away from the surface to avoid immediate re-parenting by collision system
+              const parent = this.bodies.find(b => b.id === (v as any).parentBodyId);
+              if (parent) {
+                const dx = v.position.x - parent.position.x;
+                const dy = v.position.y - parent.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                // Nudge by 10% of rocket radius to ensure clear separation
+                const nudgeDist = (v.radius || 0.0001) * 0.1;
+                v.position.x += (dx / dist) * nudgeDist;
+                v.position.y += (dy / dist) * nudgeDist;
+              }
+            }
             (v as any).parentBodyId = null;
             (v as any).isLaunchingOrThrusting = true;
             v.velocity.x += Math.cos(v.rotation) * totalAcceleration * stepDt;
@@ -1108,7 +1168,7 @@ function autopilotStep(t, fc) {
                       vehicleBody.velocity.y -= inward * ny;
                     }
                     continue; // Never merge/crash while thrusting
-                  } else if (relSpeedSq < 4.0) {
+                  } else if (relSpeedSq < 1e-6 && !(vehicleBody as any).isLaunchingOrThrusting) {
                     // Gentle landing: bind to surface
                     const v = vehicleBody as any;
                     v.parentBodyId = other.id;

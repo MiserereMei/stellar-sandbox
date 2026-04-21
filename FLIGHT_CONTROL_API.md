@@ -32,6 +32,9 @@ Returns the celestial body that has the strongest gravitational pull on the ship
 ### fc.getBodyById(id)
 Returns a specific celestial body by its unique ID.
 
+### fc.getVehicle()
+Returns the ship's own physical data (mass, name, etc.) as a CelestialBody object.
+
 ### CelestialBody Object Properties
 All properties are in real-world units (meters, kilograms).
 
