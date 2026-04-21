@@ -98,6 +98,7 @@ export default function App() {
             selectedBodyId={selectedBodyId}
             visualSettings={visualSettings}
             setActivePopUp={handleSetActivePopUp}
+            isStreaming={streamingMode}
           />
         </main>
 

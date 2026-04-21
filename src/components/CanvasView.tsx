@@ -180,14 +180,20 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
   selectedBodyId,
   visualSettings,
   setActivePopUp,
+  isStreaming,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef(visualSettings);
+  const streamingRef = useRef(isStreaming);
 
   // Sync settings ref
   useEffect(() => {
     settingsRef.current = visualSettings;
   }, [visualSettings]);
+
+  useEffect(() => {
+    streamingRef.current = isStreaming;
+  }, [isStreaming]);
 
   // State for interaction logic
   const interactionState = useRef<{
@@ -242,6 +248,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     if (!container) return;
 
     const onPointerDown = (e: PointerEvent) => {
+      if (streamingRef.current) return;
       const iState = interactionState.current;
       iState.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       container.setPointerCapture(e.pointerId);
@@ -461,6 +468,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (streamingRef.current) return;
       const rect = container.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -597,6 +605,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     };
 
     const onPointerUp = (e: PointerEvent) => {
+      if (streamingRef.current) return;
       const iState = interactionState.current;
       iState.activePointers.delete(e.pointerId);
       if (iState.activePointers.size < 2) {
@@ -674,6 +683,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     };
 
     const onWheel = (e: WheelEvent) => {
+      if (streamingRef.current) return;
       const zoomSpeed = 0.001;
       let newZoom = sim.camera.zoom * Math.exp(-e.deltaY * zoomSpeed);
       newZoom = Math.max(1e-15, Math.min(newZoom, 1e15)); // Relaxed zoom clamp
@@ -681,6 +691,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     };
 
     const onDblClick = (e: MouseEvent) => {
+      if (streamingRef.current) return;
       const rect = container.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -704,6 +715,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (streamingRef.current) return;
       // Ignore if typing in a text field
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
@@ -718,6 +730,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
+      if (streamingRef.current) return;
       // Ignore if typing in a text field
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
@@ -962,9 +975,37 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         fgFilter.enabled =
           settingsRef.current.warpEnabled && fgLenses.length > 0;
 
-        const cx = sim.camera.x;
-        const cy = sim.camera.y;
-        const zoom = sim.camera.zoom;
+        let cx = sim.camera.x;
+        let cy = sim.camera.y;
+        let zoom = sim.camera.zoom;
+
+        if (streamingRef.current && sim.cinematicCamera.active) {
+          // Shake
+          if (sim.cinematicCamera.shake > 0.01) {
+            const intensity = sim.cinematicCamera.shake * 20; // max 20px shake
+            cx += (Math.random() - 0.5) * intensity / zoom;
+            cy += (Math.random() - 0.5) * intensity / zoom;
+          }
+          
+          // Offset
+          if (sim.cinematicCamera.offsetX !== 0 || sim.cinematicCamera.offsetY !== 0) {
+            cx -= (sim.cinematicCamera.offsetX * width / 2) / zoom;
+            cy -= (sim.cinematicCamera.offsetY * height / 2) / zoom;
+          }
+          
+          // Zoom Scale
+          if (sim.cinematicCamera.zoomScale > 0 && sim.camera.followingId) {
+             const target = sim.bodies.find(b => b.id === sim.camera.followingId);
+             if (target) {
+                // Determine screen's shortest dimension
+                const minDim = Math.min(width, height);
+                // zoomScale is fraction of screen the object diameter should cover
+                const desiredDiameterPixels = minDim * sim.cinematicCamera.zoomScale;
+                const objectDiameterUnits = Math.max(target.radius, 0.0001) * 2;
+                zoom = desiredDiameterPixels / objectDiameterUnits;
+             }
+          }
+        }
 
         // Static stars: just match screen size
         starLayer.width = width;
@@ -978,13 +1019,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         const gridSize = 100 * zoom;
 
         if (gridSize >= 15) {
-          const offsetX = (width / 2 - sim.camera.x * zoom) % gridSize;
-          const offsetY = (height / 2 - sim.camera.y * zoom) % gridSize;
+          const offsetXGrid = (width / 2 - cx * zoom) % gridSize;
+          const offsetYGrid = (height / 2 - cy * zoom) % gridSize;
 
-          for (let x = offsetX; x < width; x += gridSize) {
+          for (let x = offsetXGrid; x < width; x += gridSize) {
             gridGraphics.moveTo(x, 0).lineTo(x, height);
           }
-          for (let y = offsetY; y < height; y += gridSize) {
+          for (let y = offsetYGrid; y < height; y += gridSize) {
             gridGraphics.moveTo(0, y).lineTo(width, y);
           }
           gridGraphics.stroke({ width: 1, color: "#ffffff", alpha: 0.05 });
@@ -999,6 +1040,12 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         worldFgContainer.position.copyFrom(worldBgContainer.position);
         worldFgContainer.scale.set(1.0);
         worldFgContainer.pivot.copyFrom(worldBgContainer.pivot);
+
+        // UI Layer
+        labelsContainer.position.set(width / 2, height / 2);
+        labelsContainer.scale.set(1.0);
+        uiGraphics.position.set(width / 2, height / 2);
+        uiGraphics.scale.set(1.0);
 
         backgroundTrailsGraphics.clear();
         foregroundTrailsGraphics.clear();

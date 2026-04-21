@@ -448,6 +448,25 @@ export class Simulation {
   public targetLaunchTime: number | null = null;
   public launchEpoch: number | null = null;
   public activeBoosters: { thrust: number, endTime: number, onBurnout?: () => void }[] = [];
+  
+  public cinematicCamera = {
+    active: false,
+    zoomScale: -1,
+    targetZoomScale: 0.5,
+    zoomStart: 0.5,
+    zoomTime: 0,
+    zoomDuration: 0,
+    offsetX: 0,
+    offsetY: 0,
+    targetOffsetX: 0,
+    targetOffsetY: 0,
+    offsetStartX: 0,
+    offsetStartY: 0,
+    offsetTime: 0,
+    offsetDuration: 0,
+    shake: 0
+  };
+
   private autopilotStepFn: any = null;
   private onLaunchFn: any = null;
   public autopilotLog: (msg: string) => void = () => { };
@@ -595,6 +614,11 @@ export class Simulation {
     this.targetLaunchTime = null;
     this.launchEpoch = null;
     this.activeBoosters = [];
+    this.cinematicCamera.active = false;
+    this.cinematicCamera.shake = 0;
+    this.cinematicCamera.offsetX = 0;
+    this.cinematicCamera.offsetY = 0;
+    this.cinematicCamera.zoomScale = -1;
     if (this.vehicle) {
       (this.vehicle as any).thrusting = false;
       (this.vehicle as any).rotatingLeft = false;
@@ -871,6 +895,31 @@ function autopilotStep(t, fc) {
                   onBurnout
               });
               this.autopilotLog(`BOOSTER IGNITION: ${(thrustNewtons / 1e6).toFixed(1)} MN for ${burnTimeSeconds}s`);
+            },
+            setCameraZoom: (scale: number, smoothTime: number = 0) => {
+              this.cinematicCamera.active = true;
+              this.cinematicCamera.targetZoomScale = scale;
+              this.cinematicCamera.zoomStart = this.cinematicCamera.zoomScale > 0 ? this.cinematicCamera.zoomScale : scale;
+              this.cinematicCamera.zoomTime = 0;
+              this.cinematicCamera.zoomDuration = smoothTime;
+              if (smoothTime <= 0) this.cinematicCamera.zoomScale = scale;
+            },
+            setCameraOffset: (x: number, y: number, smoothTime: number = 0) => {
+              this.cinematicCamera.active = true;
+              this.cinematicCamera.targetOffsetX = x;
+              this.cinematicCamera.targetOffsetY = y;
+              this.cinematicCamera.offsetStartX = this.cinematicCamera.offsetX;
+              this.cinematicCamera.offsetStartY = this.cinematicCamera.offsetY;
+              this.cinematicCamera.offsetTime = 0;
+              this.cinematicCamera.offsetDuration = smoothTime;
+              if (smoothTime <= 0) {
+                this.cinematicCamera.offsetX = x;
+                this.cinematicCamera.offsetY = y;
+              }
+            },
+            setCameraShake: (intensity: number) => {
+              this.cinematicCamera.active = true;
+              this.cinematicCamera.shake = intensity;
             },
             log: (msg: string) => this.autopilotLog(msg)
           };
@@ -1210,6 +1259,23 @@ function autopilotStep(t, fc) {
   }
 
   updateCameraFollow(dt: number) {
+    if (this.cinematicCamera.active) {
+      if (this.cinematicCamera.zoomDuration > 0 && this.cinematicCamera.zoomTime < this.cinematicCamera.zoomDuration) {
+        this.cinematicCamera.zoomTime += dt;
+        const t = Math.min(1, this.cinematicCamera.zoomTime / this.cinematicCamera.zoomDuration);
+        const easeOut = 1 - Math.pow(1 - t, 3);
+        this.cinematicCamera.zoomScale = this.cinematicCamera.zoomStart + (this.cinematicCamera.targetZoomScale - this.cinematicCamera.zoomStart) * easeOut;
+      }
+      
+      if (this.cinematicCamera.offsetDuration > 0 && this.cinematicCamera.offsetTime < this.cinematicCamera.offsetDuration) {
+        this.cinematicCamera.offsetTime += dt;
+        const t = Math.min(1, this.cinematicCamera.offsetTime / this.cinematicCamera.offsetDuration);
+        const easeOut = 1 - Math.pow(1 - t, 3);
+        this.cinematicCamera.offsetX = this.cinematicCamera.offsetStartX + (this.cinematicCamera.targetOffsetX - this.cinematicCamera.offsetStartX) * easeOut;
+        this.cinematicCamera.offsetY = this.cinematicCamera.offsetStartY + (this.cinematicCamera.targetOffsetY - this.cinematicCamera.offsetStartY) * easeOut;
+      }
+    }
+
     if (this.camera.followingId !== this.lastFollowId) {
       this.lastFollowId = this.camera.followingId;
       this.camTransition = 0;

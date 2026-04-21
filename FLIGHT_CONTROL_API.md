@@ -55,6 +55,16 @@ interface CelestialBody {
 | `fc.setLaunchTime(startTime)` | Schedules a T-0 launch sequence. HUD counts down and calls `onLaunch(fc)` exactly at T-0. | Seconds |
 | `fc.igniteBooster(thrust, burnTime, onBurnout)` | Fires solid rocket boosters (SRBs) adding raw physical force. `onBurnout(fc)` is triggered when fuel runs out. | Newtons, Seconds |
 
+## Cinematic Camera (Streaming Mode)
+
+*These functions only affect the viewport when Streaming Mode (Ctrl+Shift+S) is active.*
+
+| Method | Description | Units |
+| :--- | :--- | :--- |
+| `fc.setCameraZoom(scale, smoothTime?)` | Changes the camera zoom to make the tracked object fill the given fraction of the screen. | `scale`: 0.0 to 1.0 (screen fraction), `smoothTime`: Seconds |
+| `fc.setCameraOffset(x, y, smoothTime?)` | Offsets the camera focus point to add lead-room for ascent/descent. | `x`, `y`: -1.0 to 1.0 (screen percentage), `smoothTime`: Seconds |
+| `fc.setCameraShake(intensity)` | Shakes the viewport to simulate engine vibration or atmospheric friction. | `intensity`: 0.0 (off) to 1.0 (violent) |
+
 ## Utility
 
 | Method | Description |
