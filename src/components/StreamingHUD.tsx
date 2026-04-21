@@ -20,7 +20,8 @@ function fmtSpeed(simUnits: number): string {
 
 function fmtTime(seconds: number): string {
   const neg = seconds < 0;
-  const s = Math.floor(Math.abs(seconds));
+  // For countdowns (-0.1), we want it to show T-1, not T-0. Ceil the absolute value.
+  const s = neg ? Math.ceil(Math.abs(seconds)) : Math.floor(Math.abs(seconds));
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
   const prefix = neg ? 'T-' : 'T+';
