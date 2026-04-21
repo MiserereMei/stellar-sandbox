@@ -110,6 +110,10 @@ export class Simulation {
     this.missionTime = 0;
     this.secondsPerSimSecond = 1.0;
     this.isAutopilotActive = false;
+    this.targetLaunchTime = null;
+    this.launchEpoch = null;
+    this.activeBoosters = [];
+    this.cinematicCamera.active = false;
   }
 
   addBody(x: number, y: number, vx: number = 0, vy: number = 0): Body {

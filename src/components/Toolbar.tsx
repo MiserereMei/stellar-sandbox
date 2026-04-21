@@ -25,11 +25,13 @@ interface ToolbarProps {
   setStreamingMode: (val: boolean) => void;
   apiKey: string;
   setApiKey: (val: string) => void;
+  lastAction: (() => void) | null;
+  setLastAction: (val: (() => void) | null) => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   sim, toolMode, setToolMode, addMode, setAddMode, creationPreset, setCreationPreset, activePopUp, setActivePopUp, visualSettings, setVisualSettings,
-  showAutopilot, setShowAutopilot, streamingMode, setStreamingMode, apiKey, setApiKey
+  showAutopilot, setShowAutopilot, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction
 }) => {
   const [paused, setPaused] = useState(sim.paused);
   const [timeScale, setTimeScale] = useState(sim.timeScale);
@@ -220,8 +222,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
   // Button wrapper for consistency
   const DockButton = ({
-    active, onClick, children, title, color = 'blue'
-  }: { active?: boolean, onClick: (e: React.MouseEvent) => void, children: React.ReactNode, title?: string, color?: 'blue' | 'purple' | 'red' }) => {
+    active, onClick, onContextMenu, children, title, color = 'blue'
+  }: { active?: boolean, onClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent) => void, children: React.ReactNode, title?: string, color?: 'blue' | 'purple' | 'red' }) => {
     const colors = {
       blue: active ? 'bg-blue-600 text-white border-blue-500' : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20 hover:text-white hover:bg-white/10',
       purple: active ? 'bg-purple-600 text-white border-purple-500' : 'bg-white/5 text-purple-400 border-white/10 hover:border-white/20 hover:text-purple-300 hover:bg-purple-900/20',
@@ -231,6 +233,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     return (
       <button
         onClick={onClick}
+        onContextMenu={onContextMenu}
         className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border transition-all duration-200 outline-none aspect-square ${colors[color]}`}
         title={title}
       >
@@ -273,7 +276,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <Plus size={20} />
             </DockButton>
 
-            <DockButton color="red" onClick={() => { sim.clear(); sim.camera.followingId = null; }} title="Clear Simulation">
+            <DockButton 
+              color="red" 
+              onClick={() => { sim.clear(); sim.camera.followingId = null; setLastAction(null); }} 
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (lastAction) {
+                  sim.clear();
+                  lastAction();
+                }
+              }}
+              title="Clear Simulation (Right-click to reset last system)"
+            >
               <Undo2 size={18} />
             </DockButton>
           </div>
@@ -535,7 +549,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 ].map(sys => (
                   <button
                     key={sys.label}
-                    onClick={() => { sys.action(); setToolMode('select'); setActivePopUp(null); }}
+                    onClick={() => { 
+                      sys.action(); 
+                      setToolMode('select'); 
+                      setActivePopUp(null); 
+                      setLastAction(() => sys.action);
+                    }}
                     className="w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
                   >
                     {sys.label}
@@ -555,7 +574,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 ].map(scenario => (
                   <button
                     key={scenario.label}
-                    onClick={() => { scenario.action(); setToolMode('select'); setActivePopUp(null); }}
+                    onClick={() => { 
+                      scenario.action(); 
+                      setToolMode('select'); 
+                      setActivePopUp(null); 
+                      setLastAction(() => scenario.action);
+                    }}
                     className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${scenario.red ? 'text-red-400 hover:bg-red-400/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                   >
                     {scenario.label}
@@ -607,7 +631,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                           .map(sys => (
                             <button 
                                 key={sys.name}
-                                onClick={() => { sim.loadOECSystem(sys); setActivePopUp(null); }}
+                                onClick={() => { 
+                                  sim.loadOECSystem(sys); 
+                                  setActivePopUp(null); 
+                                  setLastAction(() => () => sim.loadOECSystem(sys));
+                                }}
                                 className="w-full flex items-center justify-between bg-black/40 hover:bg-blue-900/10 border border-white/5 hover:border-blue-500/30 p-3 rounded-xl transition-all group"
                             >
                                 <div className="text-left flex items-center gap-3">
@@ -837,33 +865,35 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   onClick={() => {
                     const data = prompt('Paste scenario data or URL:');
                     if (data) {
-                      try {
-                        let jsonStr = data;
-                        if (data.includes('#')) {
-                          const base64 = data.split('#')[1];
-                          jsonStr = decodeURIComponent(escape(atob(base64)));
-                        }
-                        const parsed = JSON.parse(jsonStr);
-                        sim.clear();
-                        if (Array.isArray(parsed)) {
-                          // Old format (just bodies)
-                          sim.bodies = parsed;
-                        } else if (parsed.bodies) {
-                          // New format (bodies + script + camera)
-                          sim.bodies = parsed.bodies;
-                          if (parsed.script) sim.currentScript = parsed.script;
-                          if (parsed.camera) {
-                            sim.camera.x = parsed.camera.x || 0;
-                            sim.camera.y = parsed.camera.y || 0;
-                            sim.camera.zoom = parsed.camera.zoom || 1;
-                            sim.camera.followingId = parsed.camera.followingId || null;
+                      const loadData = (raw: string) => {
+                        try {
+                          let jsonStr = raw;
+                          if (raw.includes('#')) {
+                            const base64 = raw.split('#')[1];
+                            jsonStr = decodeURIComponent(escape(atob(base64)));
                           }
+                          const parsed = JSON.parse(jsonStr);
+                          sim.clear();
+                          if (Array.isArray(parsed)) {
+                            sim.bodies = parsed;
+                          } else if (parsed.bodies) {
+                            sim.bodies = parsed.bodies;
+                            if (parsed.script) sim.currentScript = parsed.script;
+                            if (parsed.camera) {
+                              sim.camera.x = parsed.camera.x || 0;
+                              sim.camera.y = parsed.camera.y || 0;
+                              sim.camera.zoom = parsed.camera.zoom || 1;
+                              sim.camera.followingId = parsed.camera.followingId || null;
+                            }
+                          }
+                          const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
+                          if (v) sim.vehicle = v as any;
+                        } catch (e) {
+                          alert('Invalid scenario data');
                         }
-                        const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
-                        if (v) sim.vehicle = v as any;
-                      } catch (e) {
-                        alert('Invalid scenario data');
-                      }
+                      };
+                      loadData(data);
+                      setLastAction(() => () => loadData(data));
                     }
                   }}
                   className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-1.5 rounded transition-colors"

@@ -38,6 +38,7 @@ export default function App() {
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('stellar_api_key') || '');
   const [streamingMode, setStreamingMode] = useState(false);
   const [autopilotLogs, setAutopilotLogs] = useState<{ time: number; msg: string }[]>([]);
+  const [lastAction, setLastAction] = useState<(() => void) | null>(null);
 
   const addAutopilotLog = useCallback((msg: string) => {
     setAutopilotLogs(prev => [...prev.slice(-99), { time: sim.missionTime, msg }]);
@@ -54,24 +55,40 @@ export default function App() {
   useEffect(() => {
     if (window.location.hash && window.location.hash.length > 1) {
       try {
-        const base64 = window.location.hash.substring(1);
-        const jsonStr = decodeURIComponent(escape(atob(base64)));
-        const parsed = JSON.parse(jsonStr);
-        sim.clear();
-        if (Array.isArray(parsed)) {
-          sim.bodies = parsed;
-        } else if (parsed.bodies) {
-          sim.bodies = parsed.bodies;
-          if (parsed.script) sim.currentScript = parsed.script;
-          if (parsed.camera) {
-            sim.camera.x = parsed.camera.x || 0;
-            sim.camera.y = parsed.camera.y || 0;
-            sim.camera.zoom = parsed.camera.zoom || 1;
-            sim.camera.followingId = parsed.camera.followingId || null;
+        const loadData = (raw: string) => {
+          try {
+            let jsonStr = raw;
+            if (raw.includes('#')) {
+              const base64 = raw.split('#')[1];
+              jsonStr = decodeURIComponent(escape(atob(base64)));
+            } else if (!raw.startsWith('{') && !raw.startsWith('[')) {
+              // Assume it's a raw base64 string if not JSON
+              jsonStr = decodeURIComponent(escape(atob(raw)));
+            }
+            const parsed = JSON.parse(jsonStr);
+            sim.clear();
+            if (Array.isArray(parsed)) {
+              sim.bodies = parsed;
+            } else if (parsed.bodies) {
+              sim.bodies = parsed.bodies;
+              if (parsed.script) sim.currentScript = parsed.script;
+              if (parsed.camera) {
+                sim.camera.x = parsed.camera.x || 0;
+                sim.camera.y = parsed.camera.y || 0;
+                sim.camera.zoom = parsed.camera.zoom || 1;
+                sim.camera.followingId = parsed.camera.followingId || null;
+              }
+            }
+            const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
+            if (v) sim.vehicle = v as any;
+          } catch (e) {
+            console.error("Failed to load scenario", e);
           }
-        }
-        const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
-        if (v) sim.vehicle = v as any;
+        };
+
+        const initialHash = window.location.hash.substring(1);
+        loadData(initialHash);
+        setLastAction(() => () => loadData(initialHash));
       } catch (e) {
         console.error("Failed to auto-load scenario from URL", e);
       }
@@ -164,6 +181,8 @@ export default function App() {
               setStreamingMode={setStreamingMode}
               apiKey={apiKey}
               setApiKey={handleSetApiKey}
+              lastAction={lastAction}
+              setLastAction={setLastAction}
             />
 
             <AnimatePresence mode="wait">
