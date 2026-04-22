@@ -904,7 +904,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         )}
       </AnimatePresence>
 
-      <AIChat sim={sim} show={activePopUp === 'ai'} onClose={() => setActivePopUp(null)} anchorRect={anchors.ai as any} apiKey={apiKey} />
+      <AIChat
+        sim={sim}
+        show={activePopUp === 'ai'}
+        onClose={() => setActivePopUp(null)}
+        anchorRect={anchors.ai as any}
+        apiKey={apiKey}
+        onSetApiKey={setApiKey}
+        onInjectScript={(script) => {
+          sim.currentScript = script;
+          sim.startAutopilot(script, () => {});
+        }}
+      />
     </>
   );
 };

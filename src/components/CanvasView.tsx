@@ -1410,7 +1410,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
             let targetPos = { x: b.position.x - cx, y: b.position.y - cy };
 
-            if (!isLense && bgLenses.length > 0) {
+            if (!isLense && bgLenses.length > 0 && settingsRef.current.warpEnabled) {
               let apparent = { x: b.position.x - cx, y: b.position.y - cy };
               for (let iter = 0; iter < 3; iter++) {
                 let offsetX = 0,
