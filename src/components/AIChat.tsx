@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { Simulation, generateId } from '../lib/Simulation';
 import { Sparkles, Loader2, Send, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import FC_API_DOC from '../../FLIGHT_CONTROL_API.md?raw';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -385,6 +386,9 @@ MASS REFERENCE:
 
 CURRENT SIMULATION STATE:
 ${JSON.stringify(simSnapshot, null, 2)}
+
+AUTOPILOT SCRIPTING REFERENCE (fc API — use when writing inject_autopilot_script):
+${FC_API_DOC}
 `.trim();
 
       const response = await ai.models.generateContent({

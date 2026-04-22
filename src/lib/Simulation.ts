@@ -901,6 +901,19 @@ function autopilotStep(t, fc) {
               this.targetLaunchTime = startTime;
               this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${startTime}s`);
             },
+            speak: (text: string, options?: { rate?: number; pitch?: number; volume?: number; lang?: string }) => {
+              if (!('speechSynthesis' in window)) return;
+              const utter = new SpeechSynthesisUtterance(String(text));
+              utter.lang    = options?.lang   ?? 'en-US';
+              utter.rate    = options?.rate   ?? 1.0;
+              utter.pitch   = options?.pitch  ?? 1.0;
+              utter.volume  = options?.volume ?? 1.0;
+              // Pick an en-US voice if available
+              const voices = window.speechSynthesis.getVoices();
+              const preferred = voices.find(v => v.lang === (options?.lang ?? 'en-US'));
+              if (preferred) utter.voice = preferred;
+              window.speechSynthesis.speak(utter);
+            },
             igniteBooster: (thrustNewtons: number, burnTimeSeconds: number, onBurnout?: () => void) => {
               this.activeBoosters.push({
                   thrust: thrustNewtons,

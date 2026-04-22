@@ -91,3 +91,22 @@ function autopilotStep(t, fc) {
     }
 }
 ```
+
+## Text-to-Speech
+
+### fc.speak(text, options?)
+Speaks text aloud using the browser's Web Speech API.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `text` | string | — | Text to speak |
+| `options.lang` | string | `"en-US"` | BCP 47 language tag |
+| `options.rate` | number | `1.0` | Speed (0.1 – 10) |
+| `options.pitch` | number | `1.0` | Pitch (0 – 2) |
+| `options.volume` | number | `1.0` | Volume (0 – 1) |
+
+```javascript
+fc.speak("Booster separation in 3 seconds.");
+fc.speak(`Altitude: ${Math.round(alt * 6371)} kilometers.`);
+fc.speak("Orbital insertion complete.", { rate: 0.9, pitch: 0.8 });
+```
