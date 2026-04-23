@@ -90,7 +90,7 @@ const TOOLS = [
       properties: {
         preset: {
           type: Type.STRING,
-          description: 'One of: solar_system, rocket_system, real_scale_solar_system, asteroid_belt, trisolar_system, meteor_shower, black_hole_system, orbit_mission, rocket_on_earth, black_hole_devour',
+          description: 'One of: solar_system, rocket_system, real_scale_solar_system, asteroid_belt, trisolar_system, meteor_shower, black_hole_system, orbit_mission, artemis_2, rocket_on_earth, black_hole_devour',
         },
       },
       required: ['preset'],
@@ -275,6 +275,7 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
           orbit_mission: () => sim.loadOrbitMission(),
           rocket_on_earth: () => sim.loadRocketOnEarth(),
           black_hole_devour: () => sim.loadBlackHoleDevour(),
+          artemis_2: () => sim.loadArtemis2Mission(),
         };
         const fn = presetMap[args.preset];
         if (fn) { fn(); return `Loaded preset: ${args.preset}`; }
@@ -394,6 +395,7 @@ BEHAVIOR RULES:
 AVAILABLE PRESETS (use with load_preset tool):
 - solar_system: Classic Sun + planets orbiting system
 - rocket_system: Rocket vehicle with Earth
+- artemis_2: 1:1 Real Scale Earth-Moon Artemis II mission (TLI Free Return Trajectory)
 - real_scale_solar_system: Realistic scale solar system
 - asteroid_belt: Sun with asteroid belt
 - trisolar_system: Chaotic 3-star system (Three-Body Problem)

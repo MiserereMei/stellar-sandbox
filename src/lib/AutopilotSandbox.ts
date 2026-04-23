@@ -33,12 +33,23 @@ export class AutopilotSandbox {
         getProgradeAngle: () => fc._state.progradeAngle,
         getVerticalSpeed: () => fc._state.verticalSpeed,
         getHorizontalSpeed: () => fc._state.horizontalSpeed,
+        getBodies: () => fc._state.bodies || [],
 
         setThrust: (amount: number) => this.onCommand('setThrust', [amount]),
         setRotate: (amount: number) => this.onCommand('setRotate', [amount]),
-        setPitch: (amount: number) => this.onCommand('setPitch', [amount]),
-        setLaunchTime: (time: number) => this.onCommand('setLaunchTime', [time]),
-        setLaunchSchedule: (time: number) => this.onCommand('setLaunchTime', [time]),
+        
+        essentials: {
+          setPitch: (amount: number) => this.onCommand('setPitch', [amount]),
+          setLaunchTime: (time: number) => this.onCommand('setLaunchTime', [time]),
+          setLaunchSchedule: (time: number) => this.onCommand('setLaunchTime', [time]),
+        },
+
+        camera: {
+          setZoom: (scale: number, smoothTime: number) => this.onCommand('setCameraZoom', [scale, smoothTime]),
+          setOffset: (x: number, y: number, smoothTime: number) => this.onCommand('setCameraOffset', [x, y, smoothTime]),
+          setShake: (intensity: number) => this.onCommand('setCameraShake', [intensity]),
+        },
+
         speak: (text: string, options: any) => {
           return new Promise(resolve => {
             this.onCommand('speak', [text, options, resolve]);
@@ -47,9 +58,6 @@ export class AutopilotSandbox {
         igniteBooster: (thrust: number, time: number, cb: () => void) => {
             this.onCommand('igniteBooster', [thrust, time, cb]);
         },
-        setCameraZoom: (scale: number, smoothTime: number) => this.onCommand('setCameraZoom', [scale, smoothTime]),
-        setCameraOffset: (x: number, y: number, smoothTime: number) => this.onCommand('setCameraOffset', [x, y, smoothTime]),
-        setCameraShake: (intensity: number) => this.onCommand('setCameraShake', [intensity]),
         log: (msg: string) => this.onCommand('log', [msg])
       };
 
