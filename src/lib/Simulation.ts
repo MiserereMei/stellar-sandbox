@@ -14,6 +14,7 @@ export interface Body {
 }
 
 import { Vehicle } from './Vehicle';
+import { AutopilotSandbox } from './AutopilotSandbox';
 
 export class Simulation {
   bodies: Body[] = [];
@@ -452,7 +453,7 @@ export class Simulation {
   public currentScript = '';
   public targetLaunchTime: number | null = null;
   public launchEpoch: number | null = null;
-  public activeBoosters: { thrust: number, endTime: number, onBurnout?: () => void }[] = [];
+  public activeBoosters: { thrust: number, endTime: number, cbId?: number }[] = [];
   
   public cinematicCamera = {
     active: false,
@@ -472,8 +473,7 @@ export class Simulation {
     shake: 0
   };
 
-  private autopilotStepFn: any = null;
-  private onLaunchFn: any = null;
+  private sandbox: AutopilotSandbox = new AutopilotSandbox();
   public autopilotLog: (msg: string) => void = () => { };
 
   getCurrentDate(): Date {
@@ -594,28 +594,109 @@ export class Simulation {
 
   startAutopilot(script: string, logCallback: (msg: string) => void) {
     this.autopilotLog = logCallback;
+    this.missionTime = 0;
+    
+    this.sandbox.onCommand = (command: string, args: any[]) => {
+      if (command === 'init_success') {
+        this.isAutopilotActive = true;
+        this.paused = false; // Ensure simulation unpauses when autopilot engages
+        if (args[0] && this.targetLaunchTime === null) {
+            this.targetLaunchTime = 0; // Auto-schedule for T-0 if script has onLaunch but didn't call setLaunchTime
+        }
+        return;
+      }
+      if (!this.isAutopilotActive || !this.vehicle) return;
+
+      switch (command) {
+        case 'setThrust':
+          const amount = Math.max(0, Math.min(1, args[0]));
+          (this.vehicle as any).thrustAmount = amount;
+          (this.vehicle as any).thrusting = amount > 0.01;
+          if (amount > 0.01) (this.vehicle as any).parentBodyId = null;
+          break;
+        case 'setRotate':
+          const rot = Math.max(-1, Math.min(1, args[0]));
+          (this.vehicle as any).rotationAmount = rot;
+          (this.vehicle as any).rotatingLeft = rot < -0.01;
+          (this.vehicle as any).rotatingRight = rot > 0.01;
+          if (Math.abs(rot) > 0.01) (this.vehicle as any).parentBodyId = null;
+          break;
+        case 'setPitch':
+          (this.vehicle as any).targetPitch = args[0];
+          break;
+        case 'setLaunchTime':
+          this.targetLaunchTime = args[0];
+          this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${args[0]}s`);
+          break;
+        case 'speak':
+          if (!('speechSynthesis' in window)) return;
+          const utter = new SpeechSynthesisUtterance(String(args[0]));
+          const options = args[1];
+          utter.lang = options?.lang ?? 'en-US';
+          utter.rate = options?.rate ?? 1.0;
+          utter.pitch = options?.pitch ?? 1.0;
+          utter.volume = options?.volume ?? 1.0;
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = voices.find(v => v.lang === (options?.lang ?? 'en-US'));
+          if (preferred) utter.voice = preferred;
+          window.speechSynthesis.speak(utter);
+          break;
+        case 'igniteBooster':
+          this.activeBoosters.push({
+            thrust: args[0],
+            endTime: this.missionTime + args[1],
+            cbId: args[2]
+          } as any);
+          this.autopilotLog(`BOOSTER IGNITION: ${(args[0] / 1e6).toFixed(1)} MN for ${args[1]}s`);
+          break;
+        case 'setCameraZoom':
+          this.cinematicCamera.active = true;
+          this.cinematicCamera.targetZoomScale = args[0];
+          this.cinematicCamera.zoomStart = this.cinematicCamera.zoomScale > 0 ? this.cinematicCamera.zoomScale : args[0];
+          this.cinematicCamera.zoomTime = 0;
+          this.cinematicCamera.zoomDuration = args[1] || 0;
+          if ((args[1] || 0) <= 0) this.cinematicCamera.zoomScale = args[0];
+          break;
+        case 'setCameraOffset':
+          this.cinematicCamera.active = true;
+          this.cinematicCamera.targetOffsetX = args[0];
+          this.cinematicCamera.targetOffsetY = args[1];
+          this.cinematicCamera.offsetStartX = this.cinematicCamera.offsetX;
+          this.cinematicCamera.offsetStartY = this.cinematicCamera.offsetY;
+          this.cinematicCamera.offsetTime = 0;
+          this.cinematicCamera.offsetDuration = args[2] || 0;
+          if ((args[2] || 0) <= 0) {
+            this.cinematicCamera.offsetX = args[0];
+            this.cinematicCamera.offsetY = args[1];
+          }
+          break;
+        case 'setCameraShake':
+          this.cinematicCamera.active = true;
+          this.cinematicCamera.shake = args[0];
+          break;
+        case 'log':
+          this.autopilotLog(args[0]);
+          break;
+      }
+    };
+
+    this.sandbox.onError = (err) => {
+      this.autopilotLog(err);
+      if (err.includes('Init Error') || err.includes('Compilation Error')) {
+          this.stopAutopilot();
+      }
+    };
+
     try {
-      this.missionTime = 0;
-      const result = new Function(`
-            ${script}
-            return { 
-                flightPlan: typeof flightPlan !== 'undefined' ? flightPlan : [], 
-                autopilotStep: typeof autopilotStep !== 'undefined' ? autopilotStep : null,
-                onLaunch: typeof onLaunch !== 'undefined' ? onLaunch : null
-            };
-        `)();
-    this.autopilotStepFn = result.autopilotStep;
-      this.onLaunchFn = result.onLaunch || null;
-      this.isAutopilotActive = true;
+      this.sandbox.start(script);
     } catch (err: any) {
-      throw new Error("Script Compilation Error: " + err.message);
+      this.autopilotLog("Sandbox Error: " + err.message);
     }
   }
 
   stopAutopilot() {
     this.isAutopilotActive = false;
-    this.autopilotStepFn = null;
-    this.onLaunchFn = null;
+    this.sandbox.stop();
     this.targetLaunchTime = null;
     this.launchEpoch = null;
     this.activeBoosters = [];
@@ -839,7 +920,7 @@ function autopilotStep(t, fc) {
   stepPhysics(stepDt: number) {
 
         // Autopilot Execution
-        if (this.isAutopilotActive && this.autopilotStepFn && this.vehicle) {
+        if (this.isAutopilotActive && this.vehicle) {
           const METER_PER_UNIT = 6371000;
           const KG_PER_UNIT_MASS = 5.972e24;
 
@@ -859,140 +940,51 @@ function autopilotStep(t, fc) {
             };
           };
 
-          const fc = {
-            setThrust: (v: number) => {
-              const amount = Math.max(0, Math.min(1, v));
-              (this.vehicle as any).thrustAmount = amount;
-              (this.vehicle as any).thrusting = amount > 0.01;
-              if (amount > 0.01) (this.vehicle as any).parentBodyId = null;
-            },
-            setRotate: (v: number) => {
-              const amount = Math.max(-1, Math.min(1, v));
-              (this.vehicle as any).rotationAmount = amount;
-              (this.vehicle as any).rotatingLeft = amount < -0.01;
-              (this.vehicle as any).rotatingRight = amount > 0.01;
-              if (Math.abs(amount) > 0.01) (this.vehicle as any).parentBodyId = null;
-            },
-            getThrust: () => (this.vehicle as any).thrusting ? 1.0 : 0.0,
-            getRotate: () => (this.vehicle as any).rotatingLeft ? -1.0 : ((this.vehicle as any).rotatingRight ? 1.0 : 0.0),
-            getRotation: () => this.vehicle!.rotation * (180 / Math.PI),
-            getAngularVelocity: () => this.vehicle!.angularVelocity * (180 / Math.PI),
-            getAltitude: () => this.getAltitude(),
-            getRelativeSpeed: () => this.getRelativeSpeed(),
-            getRadialSpeed: () => this.getRadialSpeed(),
-            getTangentialSpeed: () => this.getTangentialSpeed(),
-            getDominantBody: () => {
-              const dom = this.getDominantBody(this.vehicle!.position);
-              return dom ? formatBody(dom) : null;
-            },
-            getBodyById: (id: string) => {
-              const b = this.bodies.find(body => body.id === id);
-              return b ? formatBody(b) : null;
-            },
-            getVehicle: () => {
-              if (!this.vehicle) return null;
-              return formatBody(this.vehicle);
-            },
-            setLaunchTime: (startTime: number) => {
-              this.targetLaunchTime = startTime;
-              this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${startTime}s`);
-            },
-            setLaunchSchedule: (startTime: number) => { // alias for setLaunchTime
-              this.targetLaunchTime = startTime;
-              this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${startTime}s`);
-            },
-            speak: (text: string, options?: { rate?: number; pitch?: number; volume?: number; lang?: string }) => {
-              if (!('speechSynthesis' in window)) return;
-              const utter = new SpeechSynthesisUtterance(String(text));
-              utter.lang    = options?.lang   ?? 'en-US';
-              utter.rate    = options?.rate   ?? 1.0;
-              utter.pitch   = options?.pitch  ?? 1.0;
-              utter.volume  = options?.volume ?? 1.0;
-              // Pick an en-US voice if available
-              const voices = window.speechSynthesis.getVoices();
-              const preferred = voices.find(v => v.lang === (options?.lang ?? 'en-US'));
-              if (preferred) utter.voice = preferred;
-              window.speechSynthesis.speak(utter);
-            },
-            igniteBooster: (thrustNewtons: number, burnTimeSeconds: number, onBurnout?: () => void) => {
-              this.activeBoosters.push({
-                  thrust: thrustNewtons,
-                  endTime: this.missionTime + burnTimeSeconds,
-                  onBurnout
-              });
-              this.autopilotLog(`BOOSTER IGNITION: ${(thrustNewtons / 1e6).toFixed(1)} MN for ${burnTimeSeconds}s`);
-            },
-            setCameraZoom: (scale: number, smoothTime: number = 0) => {
-              this.cinematicCamera.active = true;
-              this.cinematicCamera.targetZoomScale = scale;
-              this.cinematicCamera.zoomStart = this.cinematicCamera.zoomScale > 0 ? this.cinematicCamera.zoomScale : scale;
-              this.cinematicCamera.zoomTime = 0;
-              this.cinematicCamera.zoomDuration = smoothTime;
-              if (smoothTime <= 0) this.cinematicCamera.zoomScale = scale;
-            },
-            setCameraOffset: (x: number, y: number, smoothTime: number = 0) => {
-              this.cinematicCamera.active = true;
-              this.cinematicCamera.targetOffsetX = x;
-              this.cinematicCamera.targetOffsetY = y;
-              this.cinematicCamera.offsetStartX = this.cinematicCamera.offsetX;
-              this.cinematicCamera.offsetStartY = this.cinematicCamera.offsetY;
-              this.cinematicCamera.offsetTime = 0;
-              this.cinematicCamera.offsetDuration = smoothTime;
-              if (smoothTime <= 0) {
-                this.cinematicCamera.offsetX = x;
-                this.cinematicCamera.offsetY = y;
-              }
-            },
-            setCameraShake: (intensity: number) => {
-              this.cinematicCamera.active = true;
-              this.cinematicCamera.shake = intensity;
-            },
-            getGravityMagnitude: () => {
-              const dom = this.getDominantBody(this.vehicle!.position);
-              if (!dom) return 0;
-              const dx = dom.position.x - this.vehicle!.position.x;
-              const dy = dom.position.y - this.vehicle!.position.y;
-              const distSq = dx * dx + dy * dy;
-              const gravitySim = (this.G * dom.mass) / Math.max(0.0001, distSq);
-              // Return in G-units (1.0 = Earth Surface Gravity)
-              // Earth surface gravity in sim units is G * 1.0 / 1.0^2 = G
-              return gravitySim / 1.541e-6; 
-            },
-            getHorizonAngle: () => {
-              const dom = this.getDominantBody(this.vehicle!.position);
-              if (!dom) return 0;
-              const dx = this.vehicle!.position.x - dom.position.x;
-              const dy = this.vehicle!.position.y - dom.position.y;
-              // Horizon is perpendicular to the vector from center
-              return (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
-            },
-            getProgradeAngle: () => {
-              const dom = this.getDominantBody(this.vehicle!.position);
-              if (!dom) return 0;
-              const rvx = this.vehicle!.velocity.x - dom.velocity.x;
-              const rvy = this.vehicle!.velocity.y - dom.velocity.y;
-              return Math.atan2(rvy, rvx) * (180 / Math.PI);
-            },
-            getVerticalSpeed: () => this.getRadialSpeed(),
-            getHorizontalSpeed: () => this.getTangentialSpeed(),
-            log: (msg: string) => this.autopilotLog(msg)
+          const dom = this.getDominantBody(this.vehicle.position);
+          let gravitySim = 0;
+          let horizonAngle = 0;
+          let progradeAngle = 0;
+
+          if (dom) {
+            const dx = dom.position.x - this.vehicle.position.x;
+            const dy = dom.position.y - this.vehicle.position.y;
+            const distSq = dx * dx + dy * dy;
+            gravitySim = (this.G * dom.mass) / Math.max(0.0001, distSq);
+            horizonAngle = (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
+            
+            const rvx = this.vehicle.velocity.x - dom.velocity.x;
+            const rvy = this.vehicle.velocity.y - dom.velocity.y;
+            progradeAngle = Math.atan2(rvy, rvx) * (180 / Math.PI);
+          }
+
+          const fcState = {
+            thrust: (this.vehicle as any).thrusting ? 1.0 : 0.0,
+            rotate: (this.vehicle as any).rotatingLeft ? -1.0 : ((this.vehicle as any).rotatingRight ? 1.0 : 0.0),
+            rotation: this.vehicle.rotation * (180 / Math.PI),
+            angularVelocity: this.vehicle.angularVelocity * (180 / Math.PI),
+            altitude: this.getAltitude(),
+            relativeSpeed: this.getRelativeSpeed(),
+            radialSpeed: this.getRadialSpeed(),
+            tangentialSpeed: this.getTangentialSpeed(),
+            dominantBody: dom ? formatBody(dom) : null,
+            vehicle: formatBody(this.vehicle),
+            bodies: this.bodies.map(formatBody),
+            gravityMagnitude: gravitySim / 1.541e-6,
+            horizonAngle,
+            progradeAngle,
+            verticalSpeed: this.getRadialSpeed(),
+            horizontalSpeed: this.getTangentialSpeed()
           };
 
           // Check if we've reached the scheduled launch time
           if (this.targetLaunchTime !== null && this.missionTime >= this.targetLaunchTime) {
             this.launchEpoch = this.missionTime; // Record exact T-0
             this.autopilotLog(`T-0! Launch sequence initiated at T+${this.missionTime.toFixed(1)}s`);
-            if (this.onLaunchFn) {
-              try { this.onLaunchFn(fc); } catch (err: any) { this.autopilotLog('onLaunch Error: ' + err.message); }
-            }
+            this.sandbox.launch(fcState);
             this.targetLaunchTime = null; // fire once
           }
-          try {
-            this.autopilotStepFn(this.missionTime, fc);
-          } catch (err: any) {
-            this.autopilotLog("Runtime Error: " + err.message);
-            this.stopAutopilot();
-          }
+          
+          this.sandbox.step(this.missionTime, fcState);
         }
 
         // Vehicle controls
@@ -1034,8 +1026,8 @@ function autopilotStep(t, fc) {
             for (let i = this.activeBoosters.length - 1; i >= 0; i--) {
                 const b = this.activeBoosters[i];
                 if (this.missionTime >= b.endTime) {
-                    if (b.onBurnout) {
-                        try { b.onBurnout(); } catch(e: any) { this.autopilotLog('onBurnout Error: ' + e.message); }
+                    if (b.cbId !== undefined && b.cbId !== null) {
+                        this.sandbox.fireCallback(b.cbId);
                     }
                     this.activeBoosters.splice(i, 1);
                 } else {
