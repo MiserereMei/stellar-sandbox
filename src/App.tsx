@@ -20,6 +20,11 @@ export type VisualSettings = {
   starsEnabled: boolean;
   trailsEnabled: boolean;
 };
+export type EngineSettings = {
+  wasmEnabled: boolean;
+  physicsMode: 'optimal' | 'preset' | 'custom';
+  physicsPreset: number;
+};
 
 export type ActivePopUp = 'ai' | 'add' | 'settings' | 'jump' | null;
 
@@ -35,12 +40,49 @@ export default function App() {
   const [creationPreset, setCreationPreset] = useState<BodyPreset>({ name: 'Planet', mass: 100, radius: 10, colorType: 'planet' });
   const [selectedBodyId, setSelectedBodyId] = useState<string | null>(null);
   const [activePopUp, setActivePopUp] = useState<ActivePopUp>(null);
-  const [visualSettings, setVisualSettings] = useState<VisualSettings>({
-    warpEnabled: true,
-    gridEnabled: true,
-    starsEnabled: true,
-    trailsEnabled: true,
+  const [visualSettings, setVisualSettings] = useState<VisualSettings>(() => {
+    const saved = localStorage.getItem('stellar_visual_settings');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse visual settings", e);
+      }
+    }
+    return {
+      warpEnabled: true,
+      gridEnabled: true,
+      starsEnabled: true,
+      trailsEnabled: true,
+    };
   });
+
+  const [engineSettings, setEngineSettings] = useState<EngineSettings>(() => {
+    const saved = localStorage.getItem('stellar_engine_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          wasmEnabled: parsed.wasmEnabled ?? true,
+          physicsMode: parsed.physicsMode ?? 'optimal',
+          physicsPreset: parsed.physicsPreset ?? 2
+        };
+      } catch (e) { console.error(e); }
+    }
+    return { wasmEnabled: true, physicsMode: 'optimal', physicsPreset: 2 };
+  });
+
+  // Save Engine Settings
+  useEffect(() => {
+    localStorage.setItem('stellar_engine_settings', JSON.stringify(engineSettings));
+    // Apply wasm status to sim
+    sim.wasmPhysics.forceDisabled = !engineSettings.wasmEnabled;
+  }, [engineSettings, sim]);
+
+  // Save Visual Settings
+  useEffect(() => {
+    localStorage.setItem('stellar_visual_settings', JSON.stringify(visualSettings));
+  }, [visualSettings]);
   const [showAutopilot, setShowAutopilot] = useState(false);
   const [showOutliner, setShowOutliner] = useState(false);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('stellar_api_key') || '');
@@ -302,6 +344,8 @@ export default function App() {
               setActivePopUp={setActivePopUp}
               visualSettings={visualSettings}
               setVisualSettings={setVisualSettings}
+              engineSettings={engineSettings}
+              setEngineSettings={setEngineSettings}
               showAutopilot={showAutopilot}
               setShowAutopilot={(val) => {
                 setShowAutopilot(val);

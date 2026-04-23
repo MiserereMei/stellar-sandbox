@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Simulation } from '../lib/Simulation';
 import { MousePointer2, CircleDot, Play, Pause, FastForward, Undo2, MousePointerClick, Sparkles, Plus, Settings, ZoomIn, ZoomOut, Maximize, Ruler, Terminal } from 'lucide-react';
-import { ToolMode, AddMode, BodyPreset, VisualSettings, ActivePopUp } from '../App';
+import { ToolMode, AddMode, BodyPreset, VisualSettings, ActivePopUp, EngineSettings } from '../App';
 import { AIChat } from './AIChat';
 import { catalogue, PlanetarySystem } from '../lib/CatalogueService';
 import { motion, AnimatePresence } from 'motion/react';
@@ -19,6 +19,8 @@ interface ToolbarProps {
   setActivePopUp: (val: ActivePopUp) => void;
   visualSettings: VisualSettings;
   setVisualSettings: (settings: VisualSettings) => void;
+  engineSettings: EngineSettings;
+  setEngineSettings: (settings: EngineSettings) => void;
   showAutopilot: boolean;
   setShowAutopilot: (val: boolean) => void;
   showOutliner: boolean;
@@ -33,7 +35,8 @@ interface ToolbarProps {
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   sim, toolMode, setToolMode, addMode, setAddMode, creationPreset, setCreationPreset, activePopUp, setActivePopUp, visualSettings, setVisualSettings,
-  showAutopilot, setShowAutopilot, showOutliner, setShowOutliner, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction
+  showAutopilot, setShowAutopilot, showOutliner, setShowOutliner, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction,
+  engineSettings, setEngineSettings
 }) => {
   const [paused, setPaused] = useState(sim.paused);
   const [timeScale, setTimeScale] = useState(sim.timeScale);
@@ -53,8 +56,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [jumpTargetDate, setJumpTargetDate] = useState(sim.getCurrentDate().toISOString().split('T')[0]);
   const [jumpPrecision, setJumpPrecision] = useState<'fast' | 'high' | 'ultra'>('high');
   const [wasmTick, setWasmTick] = useState(0);
-  const [physicsMode, setPhysicsMode] = useState<'optimal' | 'preset' | 'custom'>('optimal');
-  const [physicsPreset, setPhysicsPreset] = useState(2); // 0-4 range
 
   const handleDateClick = (e: React.MouseEvent) => {
     if (isJumping) return;
@@ -913,78 +914,61 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     <div className="flex flex-col gap-4">
                       {/* Physics Backend Toggle */}
                       <div className="flex flex-col gap-2">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Physics Backend</div>
-                        <div className="flex flex-col gap-2 p-3 rounded-lg border border-white/10 bg-white/[0.03]">
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[11px] text-white font-medium">
-                                WebAssembly
-                                <span className={`ml-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded ${
-                                  sim.wasmPhysics.active
-                                    ? 'text-emerald-400 bg-emerald-400/10'
-                                    : sim.wasmPhysics.ready
-                                      ? 'text-amber-400 bg-amber-400/10'
-                                      : 'text-red-400 bg-red-400/10'
-                                }`}>
-                                  {sim.wasmPhysics.active
-                                    ? 'Running'
-                                    : sim.wasmPhysics.ready
-                                      ? 'Standby'
-                                      : 'Loading...'}
-                                </span>
-                              </span>
-                              <span className="text-[9px] text-gray-500">10–20× faster gravity calculations</span>
-                            </div>
-                            <button
-                              id="wasm-toggle"
-                              onClick={() => {
-                                sim.wasmPhysics.forceDisabled = !sim.wasmPhysics.forceDisabled;
-                                setWasmTick(t => t + 1);
-                              }}
-                              className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none border ${
-                                sim.wasmPhysics.active
-                                  ? 'bg-sky-500/30 border-sky-500/50'
-                                  : 'bg-white/5 border-white/10'
-                              }`}
-                            >
-                              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform duration-200 ${
-                                sim.wasmPhysics.active
-                                  ? 'translate-x-5 bg-sky-400'
-                                  : 'translate-x-0 bg-gray-500'
-                              }`} />
-                            </button>
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Computational Backend</div>
+                        <label className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 cursor-pointer transition-colors group">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[11px] uppercase tracking-wide text-gray-300 group-hover:text-white font-medium">WebAssembly (WASM)</span>
+                            <span className="text-[9px] text-gray-500">10–20× faster gravity calculations</span>
                           </div>
-                        </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                              sim.wasmPhysics.active
+                                ? 'text-emerald-400 bg-emerald-400/10'
+                                : sim.wasmPhysics.ready
+                                  ? 'text-amber-400 bg-amber-400/10'
+                                  : 'text-red-400 bg-red-400/10'
+                            }`}>
+                              {sim.wasmPhysics.active ? 'ACTIVE' : sim.wasmPhysics.ready ? 'STANDBY' : 'LOADING'}
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={engineSettings.wasmEnabled}
+                              onChange={() => setEngineSettings({ ...engineSettings, wasmEnabled: !engineSettings.wasmEnabled })}
+                              className="w-4 h-4 rounded border-white/10 bg-black/50 text-blue-500 focus:ring-0"
+                            />
+                          </div>
+                        </label>
                       </div>
 
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 pt-2 border-t border-white/5">
                         <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Physics Engine</div>
                         
                         {/* Mode Selector */}
                         <div className="flex flex-col gap-1">
-                          <span className="text-[9px] text-gray-400 uppercase tracking-widest">Calculation Mode</span>
+                          <span className="text-[9px] text-gray-400 uppercase tracking-widest px-1">Calculation Mode</span>
                           <select 
-                            value={physicsMode}
+                            value={engineSettings.physicsMode}
                             onChange={(e) => {
                               const mode = e.target.value as any;
-                              setPhysicsMode(mode);
+                              const updates: Partial<EngineSettings> = { physicsMode: mode };
                               if (mode === 'optimal') {
                                 sim.physicsPrecision = 0.01;
                                 sim.maxSubsteps = 200;
                               }
+                              setEngineSettings({ ...engineSettings, ...updates });
                             }}
-                            className="bg-black/50 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-blue-500 transition-colors"
+                            className="bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500/50 transition-all font-mono"
                           >
-                            <option value="optimal">Optimal (Default)</option>
-                            <option value="preset">Preset (Simple)</option>
-                            <option value="custom">Custom (Advanced)</option>
+                            <option value="optimal">Optimal (Balanced)</option>
+                            <option value="preset">Preset (Power Selection)</option>
+                            <option value="custom">Custom (Scientific Manual)</option>
                           </select>
                         </div>
 
                         {/* Preset Slider (Visible in Preset mode) */}
-                        {physicsMode === 'preset' && (
-                          <div className="flex flex-col gap-2 p-3 rounded-lg border border-white/10 bg-white/[0.03]">
-                            <div className="flex justify-between text-[9px] text-gray-400 uppercase tracking-tight">
+                        {engineSettings.physicsMode === 'preset' && (
+                          <div className="flex flex-col gap-2 p-3 rounded-xl border border-white/5 bg-black/40">
+                            <div className="flex justify-between text-[9px] text-gray-500 uppercase tracking-tight font-bold">
                               <span>Max Speed</span>
                               <span>Ultra Precision</span>
                             </div>
@@ -993,67 +977,71 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                               min="0"
                               max="4"
                               step="1"
-                              value={physicsPreset}
+                              value={engineSettings.physicsPreset}
                               onChange={(e) => {
                                 const val = parseInt(e.target.value);
-                                setPhysicsPreset(val);
+                                setEngineSettings({ ...engineSettings, physicsPreset: val });
                                 // Apply preset values to simulation
                                 const presets = [
-                                  { p: 0.1,   s: 50 },   // Max Speed
-                                  { p: 0.05,  s: 100 },  // Performance
-                                  { p: 0.01,  s: 200 },  // Balanced
-                                  { p: 0.005, s: 1000 }, // High Fidelity
-                                  { p: 0.001, s: 5000 }  // Ultra Precision
+                                  { p: 0.1, s: 50 },  // Speed
+                                  { p: 0.05, s: 100 },
+                                  { p: 0.01, s: 200 }, // Default
+                                  { p: 0.005, s: 500 },
+                                  { p: 0.001, s: 1000 } // Precision
                                 ];
                                 sim.physicsPrecision = presets[val].p;
                                 sim.maxSubsteps = presets[val].s;
                               }}
-                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
                             />
-                            <div className="flex justify-between px-1">
-                              {[0, 1, 2, 3, 4].map(i => (
-                                <div key={i} className={`w-1 h-1 rounded-full ${i <= physicsPreset ? 'bg-sky-500' : 'bg-white/10'}`} />
-                              ))}
-                            </div>
-                            <div className="text-center text-[9px] text-sky-400/80 font-mono mt-1 uppercase tracking-widest">
-                              {['Low Res (Speed)', 'Performance', 'Balanced', 'High Fidelity', 'Scientific (Heavy)'][physicsPreset]}
+                            <div className="flex justify-between text-[8px] text-blue-400 font-mono">
+                              <span>{engineSettings.physicsPreset === 0 ? 'BOOST' : ''}</span>
+                              <span>{engineSettings.physicsPreset === 2 ? 'BALANCED' : ''}</span>
+                              <span>{engineSettings.physicsPreset === 4 ? 'SCIENTIFIC' : ''}</span>
                             </div>
                           </div>
                         )}
 
                         {/* Custom Inputs (Visible in Custom mode) */}
-                        {physicsMode === 'custom' && (
-                          <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                            <label className="flex flex-col gap-1">
-                              <span className="text-[9px] text-gray-400 uppercase tracking-widest">Precision (Step)</span>
-                              <input type="number"
-                                defaultValue={sim.physicsPrecision}
+                        {engineSettings.physicsMode === 'custom' && (
+                          <div className="grid grid-cols-2 gap-2 p-3 rounded-xl border border-white/5 bg-black/40">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[9px] text-gray-500 uppercase font-bold tracking-tight">Precision (Step)</span>
+                              <input 
+                                type="number"
                                 step="0.001"
+                                defaultValue={sim.physicsPrecision}
                                 onBlur={(e) => {
                                   const val = parseFloat(e.target.value);
-                                  if (!isNaN(val) && val > 0) sim.physicsPrecision = val;
+                                  if (!isNaN(val) && val > 0) {
+                                    sim.physicsPrecision = val;
+                                    setWasmTick(t => t + 1);
+                                  }
                                 }}
-                                className="bg-black/50 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-blue-500 font-mono"
+                                className="bg-black/20 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-blue-400 font-mono outline-none focus:border-blue-500/50"
                               />
-                            </label>
-                            <label className="flex flex-col gap-1">
-                              <span className="text-[9px] text-gray-400 uppercase tracking-widest">Max Substeps</span>
-                              <input type="number"
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[9px] text-gray-500 uppercase font-bold tracking-tight">Max Substeps</span>
+                              <input 
+                                type="number"
                                 defaultValue={sim.maxSubsteps}
-                                step="10"
                                 onBlur={(e) => {
                                   const val = parseInt(e.target.value);
-                                  if (!isNaN(val) && val > 0) sim.maxSubsteps = val;
+                                  if (!isNaN(val) && val > 0) {
+                                    sim.maxSubsteps = val;
+                                    setWasmTick(t => t + 1);
+                                  }
                                 }}
-                                className="bg-black/50 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-blue-500 font-mono"
+                                className="bg-black/20 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-blue-400 font-mono outline-none focus:border-blue-500/50"
                               />
-                            </label>
+                            </div>
                           </div>
                         )}
 
                         {/* Common Global Constant */}
-                        <label className="flex flex-col gap-1">
-                          <span className="text-[9px] text-gray-400 uppercase tracking-widest">Gravitational Constant (G)</span>
+                        <label className="flex flex-col gap-1 p-3 rounded-xl border border-white/5 bg-black/40">
+                          <span className="text-[9px] text-gray-500 uppercase font-bold tracking-tight">Gravitational Constant (G)</span>
                           <input type="number"
                             defaultValue={sim.G}
                             step="any"
@@ -1061,7 +1049,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val)) sim.G = val;
                             }}
-                            className="bg-black/50 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-blue-500 font-mono transition-colors"
+                            className="bg-black/20 border border-white/5 rounded-lg px-2 py-2 text-xs text-blue-400 font-mono outline-none focus:border-blue-500/50 transition-all"
                           />
                         </label>
                       </div>
