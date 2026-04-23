@@ -604,6 +604,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     { label: 'Auto-Orbit Mission', action: () => sim.loadOrbitMission() },
                     { label: 'Artemis 2 Mission', action: () => sim.loadArtemis2Mission() },
                     { label: 'Rocket on Earth', action: () => sim.loadRocketOnEarth() },
+                    { label: 'Deep Impact (Crash Test)', action: () => (sim as any).loadDeepImpactScenario() },
                     { label: 'Black Hole Devour', action: () => sim.loadBlackHoleDevour(), red: true }
                   ].map(scenario => (
                     <button

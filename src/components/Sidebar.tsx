@@ -14,6 +14,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
   const [massUnit, setMassUnit] = useState<string>('Solar Masses');
   const [radiusUnit, setRadiusUnit] = useState<string>('Solar Radii');
   const [speedUnit, setSpeedUnit] = useState<string>('km/s');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const massUnits: Record<string, number> = {
     'Kilograms': 1.6744e-25,      
@@ -67,9 +68,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
 
     // Poll for updates so velocity/pos show changes
     const interval = setInterval(() => {
+       if (focusedField) return; // Don't overwrite while user is typing
+       
        const b = sim.bodies.find(b => b.id === selectedBodyId);
        if (b) {
-         setBody({ ...b }); // clone to trigger re-render
+         setBody({ ...b }); 
        } else {
          setBody(null);
        }
@@ -134,10 +137,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
                     >/2</button>
                     <input 
                       type="text"
-                      value={(body as any).thrustPower === 0 ? "0" : ((body as any).thrustPower || 0).toExponential(2).replace('e+0', '')}
+                      value={focusedField === 'thrust' ? undefined : ((body as any).thrustPower === 0 ? "0" : ((body as any).thrustPower || 0).toExponential(2).replace('e+0', ''))}
+                      onFocus={() => setFocusedField('thrust')}
+                      onBlur={() => setFocusedField(null)}
                       onChange={e => {
                         const val = parseFloat(e.target.value);
-                        if (!isNaN(val)) { (body as any).thrustPower = val; setBody({...body}); }
+                        if (!isNaN(val)) { 
+                           updateBody({ thrustPower: val } as any);
+                        }
                       }}
                       className="font-mono text-[12px] text-white bg-transparent flex-1 text-right outline-none px-2 py-2"
                     />
@@ -152,21 +159,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Max Integrity Energy</span>
-                  <input type="number" value={((body as any).maxKineticEnergy || 0).toFixed(0)} onChange={e => {
-                    const val = parseFloat(e.target.value);
-                    if (!isNaN(val)) { (body as any).maxKineticEnergy = val; setBody({...body}); }
-                  }} className="font-mono text-[12px] text-white bg-black/40 px-3 py-2 rounded-xl border border-white/5 w-full outline-none" />
+                  <input 
+                    type="number" 
+                    value={focusedField === 'integrity' ? undefined : ((body as any).maxKineticEnergy || 0).toFixed(0)} 
+                    onFocus={() => setFocusedField('integrity')}
+                    onBlur={() => setFocusedField(null)}
+                    onChange={e => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val)) { 
+                        updateBody({ maxKineticEnergy: val } as any);
+                      }
+                    }} className="font-mono text-[12px] text-white bg-black/40 px-3 py-2 rounded-xl border border-white/5 w-full outline-none" />
                 </div>
               </div>
             )}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Label</span>
-              <input 
-                type="text" 
-                value={body.name} 
-                onChange={e => updateBody({ name: e.target.value })}
-                className="font-mono text-[13px] text-white bg-black/40 px-3 py-2.5 rounded-xl border border-white/5 w-full outline-none focus:border-blue-500/50 transition-all"
-              />
+                <input 
+                  type="text" 
+                  value={focusedField === 'name' ? undefined : body.name} 
+                  onFocus={() => setFocusedField('name')}
+                  onBlur={() => setFocusedField(null)}
+                  onChange={e => updateBody({ name: e.target.value })}
+                  className="font-mono text-[13px] text-white bg-black/40 px-3 py-2.5 rounded-xl border border-white/5 w-full outline-none focus:border-blue-500/50 transition-all"
+                />
             </div>
 
           <div className="flex flex-col gap-1.5">
@@ -183,7 +199,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
               <div className="flex items-center flex-1 min-w-0">
                 <input 
                   type="text"
-                  value={body.mass === 0 ? "0" : (body.mass / massUnits[massUnit]).toExponential(2).replace('e+0', '')}
+                  value={focusedField === 'mass' ? undefined : (body.mass === 0 ? "0" : (body.mass / massUnits[massUnit]).toExponential(2).replace('e+0', ''))}
+                  onFocus={() => setFocusedField('mass')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={e => {
                     const val = parseFloat(e.target.value);
                     if (!isNaN(val)) updateBody({ mass: val * massUnits[massUnit] });
@@ -228,7 +246,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
                 <input 
                   type="text"
                   disabled={sim.isBodyBlackHole(body)}
-                  value={((body as any).type?.includes('rocket') ? (body.radius * 2) : body.radius) / radiusUnits[radiusUnit]}
+                  value={focusedField === 'radius' ? undefined : (((body as any).type?.includes('rocket') ? (body.radius * 2) : body.radius) / radiusUnits[radiusUnit])}
+                  onFocus={() => setFocusedField('radius')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={e => {
                     const val = parseFloat(e.target.value);
                     if (!isNaN(val)) {
@@ -339,9 +359,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
             onClose();
           }}
           title="Delete Object"
-          className="w-full py-2 flex items-center justify-center rounded-xl text-[12px] font-semibold tracking-wider transition-colors border bg-red-900/10 border-red-900/30 text-red-400 hover:bg-red-900/30 hover:border-red-900/50"
+          className="w-full py-2 flex items-center justify-center rounded-xl text-[12px] font-semibold tracking-wider transition-colors border bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
         >
           <Trash2 size={18} />
+        </button>
+
+        <button 
+          onClick={() => {
+            const isStar = sim.isStar(body);
+            sim.explosions.push({
+              x: body.position.x,
+              y: body.position.y,
+              radius: body.radius * (isStar ? 180 : 25), 
+              time: 0,
+              maxTime: isStar ? 30.0 : 2.5,
+              isSupernova: isStar,
+              seed: Math.random() * 1000
+            });
+            sim.bodies = sim.bodies.filter(b => b.id !== body.id);
+            onClose();
+          }}
+          className={`w-full py-2 flex items-center justify-center rounded-xl text-[10px] uppercase font-bold tracking-widest transition-colors border col-span-2 ${
+            sim.isStar(body) 
+              ? 'bg-purple-600/20 border-purple-600/40 text-purple-400 hover:bg-purple-600/40 hover:shadow-[0_0_30px_rgba(124,58,237,0.4)]' 
+              : 'bg-red-600/20 border-red-600/40 text-red-500 hover:bg-red-600/40 hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]'
+          }`}
+        >
+          {sim.isStar(body) ? 'Trigger Supernova' : 'Self-Destruct (Test Explosion)'}
         </button>
       </div>
         </motion.aside>

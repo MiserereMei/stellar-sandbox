@@ -954,6 +954,14 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       const foregroundTrailsGraphics = new PIXI.Graphics();
       const foregroundBodiesGraphics = new PIXI.Graphics();
 
+      // Photorealistic Explosion Layer
+      const explosionsContainer = new PIXI.Container();
+      explosionsContainer.blendMode = 'add';
+      const expBlur = new PIXI.BlurFilter(4);
+      explosionsContainer.filters = [expBlur];
+      const explosionsGraphics = new PIXI.Graphics();
+      explosionsContainer.addChild(explosionsGraphics);
+
       const labelsContainer = new PIXI.Container();
       const uiGraphics = new PIXI.Graphics();
 
@@ -965,6 +973,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       worldFgContainer.addChild(
         foregroundTrailsGraphics,
         foregroundBodiesGraphics,
+        explosionsContainer
       );
 
       app.ticker.add(() => {
@@ -1528,6 +1537,56 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             txt.alpha = 0.7;
             txt.position.set(targetPos.x * zoom, (targetPos.y - b.radius) * zoom - 4);
             txt.scale.set(1);
+          }
+        }
+
+        // --- Render Photorealistic Turbulent Explosions ---
+        explosionsGraphics.clear();
+        for (const exp of sim.explosions) {
+          const progress = exp.time / exp.maxTime;
+          const alpha = 1.0 - Math.pow(progress, 1.5);
+          const worldRadius = exp.radius * (0.1 + Math.pow(progress, 0.4) * 0.9);
+          const screenRadius = worldRadius * zoom;
+          const sx = (exp.x - cx) * zoom;
+          const sy = (exp.y - cy) * zoom;
+
+          // Helper for turbulent shapes
+          const drawTurbulence = (radius: number, segments: number, noise: number, color: string, a: number, seed: number) => {
+            const points = [];
+            for (let i = 0; i <= segments; i++) {
+              const angle = (i / segments) * Math.PI * 2;
+              // Lower frequencies (3 and 5) for smoother, wobbly edges
+              const noiseVal = Math.sin(angle * 3 + seed + exp.time * 2) * noise + Math.cos(angle * 5 - seed) * (noise * 0.5);
+              const r = radius * (1 + noiseVal);
+              points.push(sx + Math.cos(angle) * r, sy + Math.sin(angle) * r);
+            }
+            explosionsGraphics.poly(points).fill({ color, alpha: a });
+          };
+
+          if ((exp as any).isSupernova) {
+             // 1. Outer Nebula (Subtle Organic Wobble)
+             // Using exp.seed for unique patterns
+             drawTurbulence(screenRadius, 40, 0.03, "#7c3aed", alpha * 0.1, exp.seed);
+             drawTurbulence(screenRadius * 0.8, 35, 0.02, "#6d28d9", alpha * 0.15, exp.seed + 123);
+             
+             // 2. Cyan Plasma core (Minimal wobble)
+             drawTurbulence(screenRadius * 0.6, 30, 0.015, "#22d3ee", alpha * 0.25, exp.seed + 456);
+             
+             // 3. Intense White Core
+             explosionsGraphics.circle(sx, sy, screenRadius * (0.25 + (1-progress)*0.2)).fill({ color: "#ffffff", alpha: alpha * 0.9 });
+
+             // 4. Smooth Shockwaves
+             explosionsGraphics.circle(sx, sy, screenRadius * progress).stroke({ color: "#ffffff", width: 8, alpha: alpha * 0.15 });
+          } else {
+             // REGULAR EXPLOSION (Minimal Organic Wobble)
+             drawTurbulence(screenRadius, 20, 0.04, "#ea580c", alpha * 0.3, exp.seed);
+             drawTurbulence(screenRadius * 0.7, 15, 0.03, "#f97316", alpha * 0.4, exp.seed + 789);
+             
+             // White-hot center
+             explosionsGraphics.circle(sx, sy, screenRadius * 0.3).fill({ color: "#ffffff", alpha: alpha * 0.8 });
+
+             // Sharp shockwave
+             explosionsGraphics.circle(sx, sy, screenRadius * Math.pow(progress, 0.3)).stroke({ color: "#ffffff", width: 2, alpha: alpha * 0.4 });
           }
         }
 

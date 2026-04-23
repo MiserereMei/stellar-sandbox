@@ -61,6 +61,7 @@ export class Simulation {
   rulerStartPoint: Vector2 | null = null;
   rulerEndPoint: Vector2 | null = null;
   mouseWorldPos: Vector2 = { x: 0, y: 0 };
+  explosions: Array<{ x: number, y: number, radius: number, time: number, maxTime: number, seed: number }> = [];
 
   creationTemplate: { presetType: 'star' | 'planet' | 'moon' | 'comet' | 'blackhole' | 'rocket' | 'heatProtectedRocket' } = { presetType: 'planet' };
 
@@ -857,6 +858,44 @@ export class Simulation {
     this.currentScript = artemisScript;
   }
 
+  loadDeepImpactScenario() {
+    this.clear();
+    this.timeScale = 1;
+    this.G = 1.0; 
+
+    const earthId = generateId();
+    this.bodies.push({
+      id: earthId, name: 'Target Earth', mass: 1000, radius: 50, color: 'hsl(210, 80%, 40%)',
+      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+    });
+
+    this.creationTemplate = { presetType: 'rocket' };
+    const meta = this.getBodyMetadataFromPreset();
+    
+    const rocket: any = {
+      id: generateId(),
+      name: 'Impact Probe',
+      mass: meta.mass,
+      radius: meta.radius,
+      length: meta.length || meta.radius * 2,
+      color: '#ff3333',
+      position: { x: -300, y: 0 },
+      velocity: { x: 40, y: 0 }, 
+      trail: [],
+      type: 'rocket',
+      rotation: 0,
+      angularVelocity: 0,
+      thrustPower: meta.thrustPower,
+      maxKineticEnergy: 1000
+    };
+
+    this.bodies.push(rocket);
+    this.vehicle = rocket;
+    this.camera.followingId = rocket.id;
+    this.camera.zoom = 0.5;
+  }
+
+
   loadRocketOnEarth() {
     this.clear();
     this.paused = true;
@@ -943,6 +982,15 @@ export class Simulation {
       if (this.trailAccumulator > 0.05 * Math.max(1, this.timeScale / 1000)) {
         this.updateTrails();
         this.trailAccumulator = 0;
+      }
+
+      // Update explosions
+      for (let i = this.explosions.length - 1; i >= 0; i--) {
+        this.explosions[i].time += Math.abs(safeDt);
+        if (this.explosions[i].time > this.explosions[i].maxTime) {
+          this.explosions[i] = this.explosions[this.explosions.length - 1];
+          this.explosions.pop();
+        }
       }
     }
 
@@ -1247,6 +1295,13 @@ export class Simulation {
             const impactEnergy = 0.5 * Math.min(b1.mass, b2.mass) * relSpeedSq;
 
             if (impactEnergy > 50) { // Explode if impact is significant
+              this.explosions.push({
+                x: (b1.position.x + b2.position.x) / 2,
+                y: (b1.position.y + b2.position.y) / 2,
+                radius: (b1.radius + b2.radius) * 8, // Much bigger
+                time: 0,
+                maxTime: 1.0
+              });
               b1.mass = 0;
               b2.mass = 0;
               if (this.vehicle?.id === b1.id || this.vehicle?.id === b2.id) this.vehicle = null;
@@ -1306,6 +1361,25 @@ export class Simulation {
                 continue;
               } else {
                 if (relSpeedSq > 0.5) {
+                   // Calculate surface impact point
+                   const dx = vehicleBody.position.x - other.position.x;
+                   const dy = vehicleBody.position.y - other.position.y;
+                   const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                   const contactX = other.position.x + (dx / dist) * other.radius;
+                   const contactY = other.position.y + (dy / dist) * other.radius;
+
+                   // Kinetic energy based scaling for explosion radius
+                   const velocityMultiplier = Math.sqrt(relSpeedSq) * 10;
+                   const energyRadius = vehicleBody.radius * (4 + velocityMultiplier);
+
+                   this.explosions.push({
+                     x: contactX,
+                     y: contactY,
+                     radius: Math.min(energyRadius, other.radius * 2), // Cap for sanity
+                     time: 0,
+                     maxTime: 1.5,
+                     seed: Math.random() * 1000
+                   });
                    vehicleBody.mass = 0;
                    if (this.vehicle?.id === vehicleBody.id) this.vehicle = null;
                    break;
@@ -1325,6 +1399,34 @@ export class Simulation {
           }
 
           const totalMass = bigger.mass + smaller.mass;
+          
+          const isStarCollision = this.isStar(bigger as any) || this.isStar(smaller as any);
+          
+          // Calculate exact surface contact point instead of center average
+          const dx = smaller.position.x - bigger.position.x;
+          const dy = smaller.position.y - bigger.position.y;
+          const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+          const contactX = bigger.position.x + (dx / dist) * bigger.radius;
+          const contactY = bigger.position.y + (dy / dist) * bigger.radius;
+
+          // Scale radius by relative speed (Kinetic Energy factor)
+          const dvx = smaller.velocity.x - bigger.velocity.x;
+          const dvy = smaller.velocity.y - bigger.velocity.y;
+          const relSpeed = Math.sqrt(dvx*dvx + dvy*dvy);
+          const energyFactor = 1 + (relSpeed * 5); // Faster impact = bigger boom
+
+          // Add massive explosion for celestial collision
+          this.explosions.push({
+            x: contactX,
+            y: contactY,
+            // Radius now factors in velocity - MASSIVE for supernovae
+            radius: isStarCollision ? (smaller.radius * 150 * energyFactor) : (smaller.radius * 5 * energyFactor), 
+            time: 0,
+            maxTime: isStarCollision ? 30.0 : (1.0 + energyFactor * 0.1), // 30 seconds for Supernova!
+            isSupernova: isStarCollision,
+            seed: Math.random() * 1000
+          } as any);
+
           bigger.velocity.x = (bigger.mass * bigger.velocity.x + smaller.mass * smaller.velocity.x) / totalMass;
           bigger.velocity.y = (bigger.mass * bigger.velocity.y + smaller.mass * smaller.velocity.y) / totalMass;
           bigger.position.x = (bigger.mass * bigger.position.x + smaller.mass * smaller.position.x) / totalMass;
