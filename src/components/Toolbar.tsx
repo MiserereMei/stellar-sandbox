@@ -21,6 +21,8 @@ interface ToolbarProps {
   setVisualSettings: (settings: VisualSettings) => void;
   showAutopilot: boolean;
   setShowAutopilot: (val: boolean) => void;
+  showOutliner: boolean;
+  setShowOutliner: (val: boolean) => void;
   streamingMode: boolean;
   setStreamingMode: (val: boolean) => void;
   apiKey: string;
@@ -31,7 +33,7 @@ interface ToolbarProps {
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   sim, toolMode, setToolMode, addMode, setAddMode, creationPreset, setCreationPreset, activePopUp, setActivePopUp, visualSettings, setVisualSettings,
-  showAutopilot, setShowAutopilot, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction
+  showAutopilot, setShowAutopilot, showOutliner, setShowOutliner, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction
 }) => {
   const [paused, setPaused] = useState(sim.paused);
   const [timeScale, setTimeScale] = useState(sim.timeScale);
@@ -262,6 +264,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               title="Analyze & Pan"
             >
               <MousePointer2 size={18} />
+            </DockButton>
+
+            <DockButton
+              active={showOutliner}
+              onClick={() => { setShowOutliner(!showOutliner); setActivePopUp(null); }}
+              title="Simulation Outliner (Bodies List)"
+            >
+              <Layers size={18} />
             </DockButton>
 
             {sim.vehicle && (
@@ -621,7 +631,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       placeholder="Search OEC (e.g. TRAPPIST, Kepler)..."
                       value={oecSearch}
                       onChange={(e) => setOecSearch(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50"
+                      className="w-full bg-black/40 border border-white/5 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50"
                     />
                   </div>
 
@@ -732,7 +742,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   type="date"
                   value={jumpTargetDate}
                   onChange={(e) => setJumpTargetDate(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[12px] text-white outline-none focus:border-blue-500/50 font-mono"
+                  className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-[12px] text-white outline-none focus:border-blue-500/50 font-mono"
                 />
               </div>
 
@@ -799,10 +809,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               className="relative bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl w-[800px] min-h-[600px] flex flex-col pointer-events-auto overflow-hidden will-change-transform"
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
-                <div className="text-[14px] text-white font-bold tracking-widest flex items-center gap-2">
-                  <Settings size={16} className="text-blue-400" />
-                  SYSTEM SETTINGS
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
+                  <Settings size={13} className="text-blue-400" />
+                  <span>SYSTEM SETTINGS</span>
                 </div>
                 <button
                   onClick={() => setActivePopUp(null)}

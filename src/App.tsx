@@ -7,6 +7,7 @@ import { TimeJumpOverlay } from './components/TimeJumpOverlay';
 import { AIChat } from './components/AIChat';
 import { AutopilotConsole } from './components/AutopilotConsole';
 import { StreamingHUD } from './components/StreamingHUD';
+import { Outliner } from './components/Outliner';
 import { AnimatePresence } from 'motion/react';
 import EditorWindow from './components/EditorWindow';
 
@@ -41,6 +42,7 @@ export default function App() {
     trailsEnabled: true,
   });
   const [showAutopilot, setShowAutopilot] = useState(false);
+  const [showOutliner, setShowOutliner] = useState(false);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('stellar_api_key') || '');
   const [streamingMode, setStreamingMode] = useState(false);
   const [autopilotLogs, setAutopilotLogs] = useState<{ time: number; msg: string }[]>([]);
@@ -274,6 +276,14 @@ export default function App() {
           />
         </main>
 
+        <Outliner 
+          sim={sim} 
+          isVisible={showOutliner && !streamingMode} 
+          onClose={() => setShowOutliner(false)}
+          onSelectBody={onSelectBody}
+          selectedBodyId={selectedBodyId}
+        />
+
         <TimeJumpOverlay sim={sim} />
         <StreamingHUD sim={sim} isStreaming={streamingMode} autopilotLogs={autopilotLogs} />
 
@@ -297,6 +307,8 @@ export default function App() {
                 setShowAutopilot(val);
                 if (val) setSelectedBodyId(null);
               }}
+              showOutliner={showOutliner}
+              setShowOutliner={setShowOutliner}
               streamingMode={streamingMode}
               setStreamingMode={setStreamingMode}
               apiKey={apiKey}

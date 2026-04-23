@@ -93,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 340, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          className="fixed top-10 right-10 bottom-32 w-[320px] bg-[#11141b]/45 backdrop-blur-xl border border-white/10 flex flex-col overflow-hidden rounded-2xl shadow-2xl z-[60] p-6 gap-8 will-change-transform"
+          className="fixed top-4 right-4 bottom-20 w-[320px] bg-[#11141b]/25 backdrop-blur-2xl border border-white/10 flex flex-col overflow-hidden rounded-2xl shadow-2xl z-[60] p-6 gap-8 will-change-transform"
         >
           <button 
             onClick={onClose}
