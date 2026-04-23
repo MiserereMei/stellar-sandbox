@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import { Simulation, generateId } from '../lib/Simulation';
-import { Sparkles, Loader2, Send, ChevronDown, X } from 'lucide-react';
+import { Sparkles, Loader2, Send, ChevronDown, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import FC_API_DOC from '../../FLIGHT_CONTROL_API.md?raw';
 
@@ -11,6 +11,8 @@ interface Message {
   role: 'user' | 'assistant';
   text?: string;       // only shown when AI explicitly speaks
   toolCalls?: string[]; // tool names executed (for subtle indicators)
+  thought?: string;    // internal reasoning (only for supported models)
+  isError?: boolean;   // flag for error messages
 }
 
 interface AIChatProps {
@@ -96,12 +98,14 @@ const TOOLS = [
   },
   {
     name: 'load_vehicle',
-    description: 'Places a rocket vehicle on the surface of a named planet or body in the current simulation. If no bodyName is given, uses the largest body.',
+    description: 'Places a rocket vehicle. Can be placed on the surface of a body OR in open space.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        bodyName: { type: Type.STRING, description: 'Name of the planet/body to land the rocket on. e.g. "Earth", "Mars".' },
-        vehicleType: { type: Type.STRING, description: '"rocket" (standard Artemis SLS, default) or "heatProtectedRocket" (heat-shielded variant for reentry scenarios).' },
+        bodyName: { type: Type.STRING, description: 'Name of the planet/body to land on. If omitted and no position is given, uses the largest body. Set to "none" or "space" to place in open space.' },
+        vehicleType: { type: Type.STRING, description: '"rocket" (default) or "heatProtectedRocket".' },
+        position: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } }, description: 'Optional: precise position in space.' },
+        velocity: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } }, description: 'Optional: initial velocity.' },
       },
     },
   },
@@ -136,17 +140,6 @@ const TOOLS = [
         followBodyName: { type: Type.STRING, description: 'Name of the body to follow. Optional.' },
         zoom: { type: Type.NUMBER, description: 'Camera zoom level. Optional.' },
       },
-    },
-  },
-  {
-    name: 'speak',
-    description: 'Use ONLY when you cannot fulfill the request silently — e.g., ambiguous command, impossible request, or clarification needed. Keep it very brief.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        message: { type: Type.STRING },
-      },
-      required: ['message'],
     },
   },
 ];
@@ -192,10 +185,18 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
 
       case 'load_vehicle': {
         const targetName = args.bodyName?.toLowerCase();
-        const planet = targetName
-          ? sim.bodies.find(b => b.name.toLowerCase().includes(targetName) && b !== sim.vehicle)
-          : sim.bodies.filter(b => b !== sim.vehicle).sort((a, b2) => b2.mass - a.mass)[0];
-        if (!planet) return `Body "${args.bodyName}" not found.`;
+        const placeInSpace = targetName === 'none' || targetName === 'space' || (!targetName && args.position);
+
+        let planet = null;
+        if (!placeInSpace) {
+          planet = targetName
+            ? sim.bodies.find(b => b.name.toLowerCase().includes(targetName) && b !== (sim.vehicle as any))
+            : sim.bodies.filter(b => b !== (sim.vehicle as any)).sort((a, b2) => b2.mass - a.mass)[0];
+
+          if (!planet && targetName) {
+            return `Body "${args.bodyName}" not found.`;
+          }
+        }
 
         // Artemis SLS metadata (mirrors getBodyMetadataFromPreset 'rocket')
         const length = 1.538e-5;
@@ -208,8 +209,27 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
           maxKineticEnergy: 20000,
         };
 
-        // Place on top of planet (north pole = negative Y)
-        const surfaceOffset = { x: 0, y: -(planet.radius + rocketMeta.radius) };
+        let pos = args.position || { x: 0, y: 0 };
+        let vel = args.velocity || { x: 0, y: 0 };
+        let parentId = null;
+        let relativeOffset = null;
+
+        if (planet) {
+          const surfaceOffset = { x: 0, y: -(planet.radius + rocketMeta.radius) };
+          pos = {
+            x: planet.position.x + surfaceOffset.x,
+            y: planet.position.y + surfaceOffset.y,
+          };
+          vel = { x: planet.velocity.x, y: planet.velocity.y };
+          parentId = planet.id;
+          relativeOffset = surfaceOffset;
+        } else if (!args.position && sim.bodies.length > 0) {
+          // Default space placement: near the first body if no position given
+          const first = sim.bodies[0];
+          pos = { x: first.position.x + first.radius * 4, y: first.position.y };
+          vel = { x: first.velocity.x, y: first.velocity.y };
+        }
+
         const rocket: any = {
           id: generateId(),
           name: 'Artemis SLS',
@@ -217,11 +237,8 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
           radius: rocketMeta.radius,
           length: rocketMeta.length,
           color: rocketMeta.color,
-          position: {
-            x: planet.position.x + surfaceOffset.x,
-            y: planet.position.y + surfaceOffset.y,
-          },
-          velocity: { x: planet.velocity.x, y: planet.velocity.y },
+          position: pos,
+          velocity: vel,
           trail: [],
           type: args.vehicleType || 'rocket',
           rotation: -Math.PI / 2,
@@ -229,14 +246,14 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
           isHeatProtected: args.vehicleType === 'heatProtectedRocket',
           thrustPower: rocketMeta.thrustPower,
           maxKineticEnergy: rocketMeta.maxKineticEnergy,
-          parentBodyId: planet.id,
-          relativeOffset: surfaceOffset,
+          parentBodyId: parentId,
+          relativeOffset: relativeOffset,
         };
         sim.bodies.push(rocket);
         sim.vehicle = rocket;
         sim.camera.followingId = rocket.id;
         sim.camera.zoom = 2000000;
-        return `Rocket placed on "${planet.name}".`;
+        return planet ? `Rocket placed on "${planet.name}".` : `Rocket placed in space.`;
       }
 
       case 'remove_body': {
@@ -283,9 +300,6 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
         return 'Camera updated.';
       }
 
-      case 'speak':
-        return args.message ?? '';
-
       default:
         return `Unknown tool: ${name}`;
     }
@@ -302,15 +316,34 @@ export const AIChat: React.FC<AIChatProps & { onInjectScript?: (s: string) => vo
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState(0);
   // Raw Gemini multi-turn history (user/model parts)
   const historyRef = useRef<{ role: string; parts: { text: string }[] }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading]);
+  }, [messages, streamingMessage, isLoading]);
+
+  // Handle Retry Countdown
+  useEffect(() => {
+    if (retryCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setRetryCountdown(prev => {
+        if (prev <= 1) {
+          // Clear the error message when countdown reaches 0
+          setMessages(msgs => msgs.filter(m => !m.isError));
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [retryCountdown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,13 +380,16 @@ export const AIChat: React.FC<AIChatProps & { onInjectScript?: (s: string) => vo
 You are Astro, a silent AI operator for a gravity physics simulation.
 
 BEHAVIOR RULES:
-- You operate by calling tools. Do NOT write text responses unless absolutely necessary.
-- Only call "speak" if the request is genuinely ambiguous, impossible, or requires clarification.
+- You operate by calling tools. 
+- ALWAYS utilize your native reasoning API to express your internal logic or physics calculations before taking action.
+- Use plain text responses to communicate with the user, provide feedback, or explain physics. This allows your speech to be streamed in real-time.
 - Never confirm actions with text ("Done!", "I've created...", etc). Just execute.
 - For solar systems and complex scenes, use "replace_all_bodies".
-- For small modifications, use "add_body" or "remove_body".
-- Prefer "load_preset" for built-in scenarios when the user's intent matches one.
-- Use "load_vehicle" to place a rocket on any specific planet/body in the current scene.
+- For custom missions (e.g. "fly in a square", "orbit at X altitude"), use "add_body" or "replace_all_bodies" to setup the scene and "inject_autopilot_script" for the logic.
+- Do NOT use "load_preset" if the user describes a specific mission, flight path, or logic. Presets are for generic starting points only.
+- If the user says "in space" or "away from earth", do NOT include Earth or other massive bodies that would cause strong gravitational pull unless asked.
+- Use "load_vehicle" to place a rocket on a planet or in open space. To place in space, omit "bodyName" or set it to "space", and optionally provide "position"/"velocity".
+- Always check if a vehicle already exists in the "CURRENT SIMULATION STATE". If it does, you can just inject the script without reloading the vehicle unless asked.
 
 AVAILABLE PRESETS (use with load_preset tool):
 - solar_system: Classic Sun + planets orbiting system
@@ -391,8 +427,11 @@ AUTOPILOT SCRIPTING REFERENCE (fc API — use when writing inject_autopilot_scri
 ${FC_API_DOC}
 `.trim();
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
+      console.log('💬 [Astro] Conversation History:', historyRef.current);
+
+      // Start streaming
+      const result = await ai.models.generateContentStream({
+        model: 'gemini-3-flash-preview',
         contents: historyRef.current as any,
         config: {
           systemInstruction,
@@ -403,64 +442,159 @@ ${FC_API_DOC}
               parameters: t.parameters,
             }))
           }],
+          thinkingConfig: { includeThoughts: true } as any, // Explicitly enable native reasoning API
         },
       });
 
-      const candidate = response.candidates?.[0];
-      const parts = candidate?.content?.parts ?? [];
+      let currentThought = '';
+      let currentText = '';
+      const toolCallParts: any[] = [];
+
+      // Add placeholder message for streaming
+      setStreamingMessage({ role: 'assistant', thought: '', text: '' });
+
+      for await (const chunk of result) {
+        console.log('📦 [Astro] Stream Chunk:', chunk);
+        const candidate = chunk.candidates?.[0];
+        if (!candidate) continue;
+
+        const parts = candidate.content?.parts || [];
+        for (const part of parts) {
+          const thought = (part as any).thought || (part as any).reasoning;
+          if (thought) {
+            currentThought += thought;
+          }
+          if (part.text) {
+            currentText += part.text;
+          }
+          if (part.functionCall) {
+            toolCallParts.push(part);
+          }
+        }
+
+        // Update streaming message state immediately
+        setStreamingMessage({
+          role: 'assistant',
+          thought: currentThought,
+          text: currentText
+        });
+      }
 
       const toolCallNames: string[] = [];
-      let spokenText: string | undefined;
 
-      // Add model response to history
+      // Execute all tool calls found during streaming
+      for (const part of toolCallParts) {
+        const { name, args } = part.functionCall;
+        const toolResult = executeTool(name, args, sim, onInjectScript);
+        toolCallNames.push(name);
+      }
+
+      // Add full model response to history for next turn
       historyRef.current.push({
         role: 'model',
-        parts: parts.map((p: any) => {
-          if (p.text) return { text: p.text };
-          if (p.functionCall) return { text: `[tool:${p.functionCall.name}]` };
-          return { text: '' };
-        }),
+        parts: [
+          ...(currentThought ? [{ thought: currentThought } as any] : []),
+          ...(currentText ? [{ text: currentText }] : []),
+          ...toolCallParts
+        ]
       });
 
-      // Execute all tool calls
-      for (const part of parts) {
-        if (part.functionCall) {
-          const { name, args } = part.functionCall;
-          const result = executeTool(name, args, sim, onInjectScript);
-          toolCallNames.push(name);
-          if (name === 'speak') {
-            spokenText = result;
-          }
-        } else if (part.text?.trim()) {
-          // AI wrote text without using speak tool — show it
-          spokenText = (spokenText ?? '') + part.text.trim();
-        }
-      }
+      // Commit streaming message to main messages list
+      const finalAssistantMsg: Message = {
+        role: 'assistant',
+        thought: currentThought,
+        text: currentText,
+        toolCalls: toolCallNames
+      };
 
-      // Update UI messages
-      const assistantMsg: Message = { role: 'assistant' };
-      if (toolCallNames.length > 0) assistantMsg.toolCalls = toolCallNames.filter(n => n !== 'speak');
-      if (spokenText) assistantMsg.text = spokenText;
-
-      if (assistantMsg.toolCalls?.length || assistantMsg.text) {
-        setMessages(prev => [...prev, assistantMsg]);
-      }
+      setMessages(prev => [...prev, finalAssistantMsg]);
+      setStreamingMessage(null);
 
     } catch (err: any) {
       console.error(err);
-      const errStr = JSON.stringify(err) + (err.message || '') + (err.status || '');
-      const isUnavailable = errStr.includes('503') || errStr.includes('UNAVAILABLE');
-      if (isUnavailable) {
-        // Roll back: remove last user message from UI and history, restore to input
-        setMessages(prev => prev.slice(0, -1));
-        historyRef.current = historyRef.current.slice(0, -1);
-        setInput(userText);
-        // Show transient "busy" indicator that auto-clears
-        setMessages(prev => [...prev, { role: 'assistant', text: '⏳ Server busy — press Enter to retry.' }]);
-        setTimeout(() => setMessages(prev => prev.filter(m => m.text !== '⏳ Server busy — press Enter to retry.')), 3000);
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', text: `⚠ ${err.message}` }]);
+      setStreamingMessage(null);
+      
+      // Attempt to parse deep error messages from the Gemini API
+      let displayError = err.message || 'An unexpected error occurred.';
+      let delaySeconds = 0;
+
+      try {
+        // Deep recursive search for specific fields in potentially nested JSON
+        const findField = (obj: any, field: string): any => {
+          if (!obj || typeof obj !== 'object') return null;
+          if (obj[field]) return obj[field];
+          for (const key in obj) {
+            if (typeof obj[key] === 'string' && obj[key].startsWith('{')) {
+              try {
+                const res = findField(JSON.parse(obj[key]), field);
+                if (res) return res;
+              } catch (e) {}
+            }
+            const res = findField(obj[key], field);
+            if (res) return res;
+          }
+          return null;
+        };
+
+        const errorObj = typeof err.message === 'string' && err.message.startsWith('{') 
+          ? JSON.parse(err.message) 
+          : err;
+
+        // Try to find retryDelay anywhere in the error structure
+        const details = findField(errorObj, 'details');
+        if (Array.isArray(details)) {
+          const retryInfo = details.find((d: any) => d.retryDelay);
+          if (retryInfo) {
+            delaySeconds = (parseInt(retryInfo.retryDelay) || 0) + 5;
+          }
+        } else {
+          const directDelay = findField(errorObj, 'retryDelay');
+          if (directDelay) delaySeconds = (parseInt(directDelay) || 0) + 5;
+        }
+
+        if (displayError.includes('Quota exceeded') || displayError.includes('429')) {
+          const apiMsg = findField(errorObj, 'message');
+          if (typeof apiMsg === 'string' && apiMsg.includes('Quota exceeded')) {
+            displayError = apiMsg.split('\n')[0]; // Get the main error line
+          } else {
+            displayError = '🚀 Quota exceeded. Please wait a moment.';
+          }
+        } else {
+          const apiMsg = findField(errorObj, 'message');
+          if (apiMsg && typeof apiMsg === 'string' && !apiMsg.startsWith('{')) {
+            displayError = apiMsg;
+          }
+        }
+      } catch (e) {
+        // Fallback to original strings
       }
+
+      const errStr = JSON.stringify(err) + displayError;
+      
+      // Roll back: remove last user message from UI and history, restore to input
+      setMessages(prev => prev.slice(0, -1));
+      historyRef.current = historyRef.current.slice(0, -1);
+      setInput(userText);
+      
+      if (delaySeconds > 0) {
+        setRetryCountdown(delaySeconds);
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          text: `⚠ Quota exceeded. Retrying enabled in ${delaySeconds}s...`, 
+          isError: true 
+        }]);
+      } else {
+        const isUnavailable = errStr.includes('503') || errStr.includes('UNAVAILABLE');
+        if (isUnavailable) {
+          setMessages(prev => [...prev, { role: 'assistant', text: '⏳ Server busy — press Enter to retry.', isError: true }]);
+          setTimeout(() => setMessages(prev => prev.filter(m => m.text !== '⏳ Server busy — press Enter to retry.')), 3000);
+        } else {
+          setMessages(prev => [...prev, { role: 'assistant', text: `⚠ ${displayError}`, isError: true }]);
+        }
+      }
+
+      // Auto-focus back to input for retry
+      setTimeout(() => inputRef.current?.focus(), 100);
     } finally {
       setIsLoading(false);
     }
@@ -499,12 +633,24 @@ ${FC_API_DOC}
                 <Sparkles size={13} className="text-purple-400" />
                 <span>AI COORDINATOR</span>
               </div>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setMessages([]);
+                    historyRef.current = [];
+                  }}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white transition-colors"
+                  title="Clear Chat & Context"
+                >
+                  <Trash2 size={14} />
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             {/* Message History */}
@@ -563,10 +709,29 @@ ${FC_API_DOC}
                           ))}
                         </div>
                       )}
+                      {/* Thought balloon */}
+                      {msg.thought && (
+                        <div className="relative group max-w-full">
+                          <div className="absolute -left-2 top-2 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                          <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl rounded-tl-none px-3 py-2 text-[11px] text-indigo-300/90 italic leading-relaxed shadow-sm mb-2 backdrop-blur-sm">
+                            <div className="flex items-center gap-1.5 mb-1 opacity-50">
+                              <Sparkles size={10} className="text-indigo-400" />
+                              <span className="text-[9px] uppercase tracking-[1px] font-bold">Neural Processing</span>
+                            </div>
+                            {msg.thought}
+                          </div>
+                        </div>
+                      )}
                       {/* Spoken text (only when AI uses speak tool) */}
                       {msg.text && (
-                        <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[12px] text-gray-300">
-                          {msg.text}
+                        <div className={`rounded-xl px-3 py-2 text-[12px] ${
+                          msg.isError 
+                            ? 'bg-red-500/10 border border-red-500/20 text-red-400 font-mono' 
+                            : 'bg-white/5 border border-white/10 text-gray-300'
+                        }`}>
+                          {msg.isError && retryCountdown > 0 && msg.text.includes('Retrying enabled in') 
+                            ? `⚠ Quota exceeded. Retrying enabled in ${retryCountdown}s...` 
+                            : msg.text}
                         </div>
                       )}
                     </div>
@@ -574,11 +739,38 @@ ${FC_API_DOC}
                 </div>
               ))}
 
-              {isLoading && (
+              {/* ACTIVE STREAMING MESSAGE */}
+              {streamingMessage && (
                 <div className="flex justify-start">
-                  <div className="flex items-center gap-2 text-gray-600 text-[11px]">
-                    <Loader2 size={12} className="animate-spin text-purple-400" />
-                    <span>Processing...</span>
+                  <div className="space-y-1.5 max-w-[90%]">
+                    {streamingMessage.thought && (
+                      <div className="relative group max-w-full">
+                        <div className="absolute -left-2 top-2 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl rounded-tl-none px-3 py-2 text-[11px] text-indigo-300/90 italic leading-relaxed shadow-sm mb-2 backdrop-blur-sm">
+                          <div className="flex items-center gap-1.5 mb-1 opacity-50">
+                            <Sparkles size={10} className="text-indigo-400" />
+                            <span className="text-[9px] uppercase tracking-[1px] font-bold">Neural Processing</span>
+                          </div>
+                          {streamingMessage.thought}
+                        </div>
+                      </div>
+                    )}
+                    {streamingMessage.text && (
+                      <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[12px] text-gray-300">
+                        {streamingMessage.text}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isLoading && !streamingMessage && (
+                <div className="flex justify-start">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-gray-600 text-[11px]">
+                      <Loader2 size={12} className="animate-spin text-purple-400" />
+                      <span>Astro is thinking...</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -603,17 +795,18 @@ ${FC_API_DOC}
                 className="relative"
               >
                 <input
+                  ref={inputRef}
                   type={!apiKey ? 'password' : 'text'}
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder={!apiKey ? 'Paste your Gemini API key...' : 'Command the simulation...'}
-                  className="bg-black/40 border border-white/5 rounded-xl py-2.5 pl-4 pr-11 w-full text-[13px] text-gray-200 outline-none focus:border-purple-500/50 transition-all font-mono placeholder:text-gray-600"
-                  disabled={isLoading}
+                  placeholder={!apiKey ? 'Paste your Gemini API key...' : retryCountdown > 0 ? `Wait ${retryCountdown}s...` : 'Command the simulation...'}
+                  className={`bg-black/40 border border-white/5 rounded-xl py-2.5 pl-4 pr-11 w-full text-[13px] text-gray-200 outline-none focus:border-purple-500/50 transition-all font-mono placeholder:text-gray-600 ${retryCountdown > 0 ? 'opacity-50 grayscale' : ''}`}
+                  disabled={isLoading || retryCountdown > 0}
                   autoFocus
                 />
                 <button
                   type="submit"
-                  disabled={isLoading || !input.trim()}
+                  disabled={isLoading || !input.trim() || retryCountdown > 0}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-400 hover:text-purple-300 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
                   {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
