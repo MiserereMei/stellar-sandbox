@@ -130,8 +130,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
                   <div className="flex items-center w-full bg-black/40 rounded-xl border border-white/5 overflow-hidden">
                     <button 
                       onClick={() => {
-                        (body as any).thrustPower = Math.max(1e-20, ((body as any).thrustPower || 0) / 2);
-                        setBody({...body});
+                        const val = Math.max(1e-20, ((body as any).thrustPower || 0) / 2);
+                        updateBody({ thrustPower: val } as any);
                       }} 
                       className="px-2 py-2 text-[10px] font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-r border-white/5 shrink-0"
                     >/2</button>
@@ -150,8 +150,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
                     />
                     <button 
                       onClick={() => {
-                        (body as any).thrustPower = ((body as any).thrustPower || 0) * 2;
-                        setBody({...body});
+                        const val = ((body as any).thrustPower || 0) * 2;
+                        updateBody({ thrustPower: val } as any);
                       }} 
                       className="px-2 py-2 text-[10px] font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-l border-white/5 shrink-0"
                     >x2</button>

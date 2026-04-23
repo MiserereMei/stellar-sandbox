@@ -913,34 +913,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   )}
                   {settingsTab === 'engine' && (
                     <div className="flex flex-col gap-4">
-                      {/* Physics Backend Toggle */}
-                      <div className="flex flex-col gap-2">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Computational Backend</div>
-                        <label className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 cursor-pointer transition-colors group">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[11px] uppercase tracking-wide text-gray-300 group-hover:text-white font-medium">WebAssembly (WASM)</span>
-                            <span className="text-[9px] text-gray-500">10–20× faster gravity calculations</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
-                              sim.wasmPhysics.active
-                                ? 'text-emerald-400 bg-emerald-400/10'
-                                : sim.wasmPhysics.ready
-                                  ? 'text-amber-400 bg-amber-400/10'
-                                  : 'text-red-400 bg-red-400/10'
-                            }`}>
-                              {sim.wasmPhysics.active ? 'ACTIVE' : sim.wasmPhysics.ready ? 'STANDBY' : 'LOADING'}
-                            </span>
-                            <input
-                              type="checkbox"
-                              checked={engineSettings.wasmEnabled}
-                              onChange={() => setEngineSettings({ ...engineSettings, wasmEnabled: !engineSettings.wasmEnabled })}
-                              className="w-4 h-4 rounded border-white/10 bg-black/50 text-blue-500 focus:ring-0"
-                            />
-                          </div>
-                        </label>
-                      </div>
-
+                      
                       <div className="flex flex-col gap-3 pt-2 border-t border-white/5">
                         <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Physics Engine</div>
                         

@@ -63,13 +63,13 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         return {
-          wasmEnabled: parsed.wasmEnabled ?? true,
+          wasmEnabled: false, // Force false by default
           physicsMode: parsed.physicsMode ?? 'optimal',
           physicsPreset: parsed.physicsPreset ?? 2
         };
       } catch (e) { console.error(e); }
     }
-    return { wasmEnabled: true, physicsMode: 'optimal', physicsPreset: 2 };
+    return { wasmEnabled: false, physicsMode: 'optimal', physicsPreset: 2 };
   });
 
   // Save Engine Settings

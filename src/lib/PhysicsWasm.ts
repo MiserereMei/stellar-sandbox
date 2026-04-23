@@ -89,7 +89,6 @@ export class PhysicsWasm {
     }
     const ptr = this.exports.getBufferPtr();
     const view = new Float64Array(this.wasmMemory.buffer, ptr, n * BODY_STRIDE);
-
     for (let i = 0; i < n; i++) {
       const b = bodies[i];
       const base = i * BODY_STRIDE;
@@ -97,7 +96,8 @@ export class PhysicsWasm {
       view[base + 1] = b.position.y;
       view[base + 2] = b.velocity.x;
       view[base + 3] = b.velocity.y;
-      view[base + 4] = b.mass;
+      // If anchored, set mass to 0 in WASM to disable gravity simulation for this body
+      view[base + 4] = (b as any).parentBodyId ? 0.0 : b.mass;
       view[base + 5] = b.radius;
       view[base + 6] = b.isBlackHole ? 1.0 : 0.0;
     }

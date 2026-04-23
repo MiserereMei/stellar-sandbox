@@ -1171,9 +1171,13 @@ export class Simulation {
     //    Prefer WASM core; fall back to JS if not active or vehicle is anchored.
     let wasmUsed = false;
     if (wasmActive) {
-      // Find indices of thrusting vehicles for targeted sync
+      // Find indices of thrusting or anchored vehicles for targeted sync
       for (const b of this.bodies) {
-        if (((b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket') && (b as any).thrusting && !(b as any).parentBodyId) {
+        const isRocket = (b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket';
+        const isThrusting = (b as any).thrusting;
+        const isAnchored = (b as any).parentBodyId;
+
+        if (isRocket && (isThrusting || isAnchored)) {
           const vIdx = this.bodies.indexOf(b);
           if (vIdx !== -1) {
             const ptr = this.wasmPhysics.getBufferPtr();
@@ -1358,6 +1362,22 @@ export class Simulation {
                   x: v.position.x - other.position.x,
                   y: v.position.y - other.position.y
                 };
+
+                // CRITICAL: Sync to WASM immediately to prevent overwriting
+                if (wasmActive) {
+                  const vIdx = this.bodies.indexOf(v);
+                  if (vIdx !== -1) {
+                    const ptr = this.wasmPhysics.getBufferPtr();
+                    const mem = (this.wasmPhysics as any).wasmMemory.buffer;
+                    const view = new Float64Array(mem, ptr, this.bodies.length * 7);
+                    const base = vIdx * 7;
+                    view[base + 0] = v.position.x;
+                    view[base + 1] = v.position.y;
+                    view[base + 2] = v.velocity.x;
+                    view[base + 3] = v.velocity.y;
+                    view[base + 4] = 0; // Set mass to 0 in WASM so it stops moving independently
+                  }
+                }
                 continue;
               } else {
                 if (relSpeedSq > 0.5) {
