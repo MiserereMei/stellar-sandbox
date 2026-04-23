@@ -50,40 +50,57 @@ interface StreamingHUDProps {
   autopilotLogs: { time: number; msg: string }[];
 }
 
+// --- OPTIMIZED LOG LINE COMPONENT ---
+const LogLine = React.memo(({ log }: { log: { time: number, msg: string } }) => (
+  <div className="flex gap-2 items-baseline">
+    <span className="text-[9px] text-sky-400/50 shrink-0 font-mono">[{fmtTime(log.time)}]</span>
+    <span className="text-[10px] text-white/70 font-mono leading-relaxed">{log.msg}</span>
+  </div>
+));
+LogLine.displayName = 'LogLine';
+
 export const StreamingHUD: React.FC<StreamingHUDProps> = ({ sim, isStreaming, autopilotLogs }) => {
   const [tick, setTick] = useState(0);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const lastLogCount = useRef(0);
 
-  // Always tick so the display is live from the moment streaming starts
+  // Always tick so the display is live
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 100);
     return () => clearInterval(id);
   }, []);
 
+  // Performance-optimized scrolling
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (autopilotLogs.length !== lastLogCount.current) {
+      lastLogCount.current = autopilotLogs.length;
+      // Use requestAnimationFrame for smoother scroll handling
+      requestAnimationFrame(() => {
+        logsEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      });
+    }
   }, [autopilotLogs]);
 
   if (!isStreaming) return null;
 
-  // Display time logic:
-  // 1. Countdown:   targetLaunchTime set      → show missionTime - targetLaunchTime (negative)
-  // 2. Post-launch: launchEpoch set            → show missionTime - launchEpoch (0, 1, 2...)
-  // 3. No schedule: neither set               → show raw missionTime
-  const launchTarget = sim.targetLaunchTime;
-  const launchEpoch  = sim.launchEpoch;
-  const isCountdown  = launchTarget !== null && sim.missionTime < launchTarget;
-  const displayTime  = launchTarget !== null
-    ? sim.missionTime - launchTarget       // T-minus (negative)
-    : launchEpoch !== null
-      ? sim.missionTime - launchEpoch      // T+post-launch (from 0)
-      : sim.missionTime;                   // raw clock
+  // ... rest of the logic remains same until return ...
+  // (Note: I'll only replace the parts I need to)
 
-  const alt    = sim.vehicle ? sim.getAltitude() : null;
+  // Display time logic:
+  const launchTarget = sim.targetLaunchTime;
+  const launchEpoch = sim.launchEpoch;
+  const isCountdown = launchTarget !== null && sim.missionTime < launchTarget;
+  const displayTime = launchTarget !== null
+    ? sim.missionTime - launchTarget
+    : launchEpoch !== null
+      ? sim.missionTime - launchEpoch
+      : sim.missionTime;
+
+  const alt = sim.vehicle ? sim.getAltitude() : null;
   const vspeed = sim.vehicle ? sim.getRadialSpeed() : null;
   const hspeed = sim.vehicle ? sim.getTangentialSpeed() : null;
-  const speed  = sim.vehicle ? sim.getRelativeSpeed() : null;
-  const dom    = sim.vehicle ? sim.getDominantBody(sim.vehicle.position) : null;
+  const speed = sim.vehicle ? sim.getRelativeSpeed() : null;
+  const dom = sim.vehicle ? sim.getDominantBody(sim.vehicle.position) : null;
 
   const rotation = sim.vehicle ? ((sim.vehicle as any).rotation ?? 0) : 0;
   const headingDeg = ((rotation * 180 / Math.PI) + 90 + 360) % 360;
@@ -110,101 +127,51 @@ export const StreamingHUD: React.FC<StreamingHUDProps> = ({ sim, isStreaming, au
 
           {/* TOP BAR */}
           <div className="absolute top-0 left-0 right-0 h-12 flex items-center justify-between px-8">
-            {/* Mission clock */}
             <div className="flex items-center gap-3">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-emerald-400 text-[11px] font-bold tracking-[3px] uppercase">STREAMING</span>
-              <span
-                className={`text-[11px] tracking-widest ml-2 font-mono font-bold transition-colors ${
-                  isCountdown ? 'text-amber-400 animate-pulse' : 'text-white/40'
-                }`}
-              >
+              <span className={`text-[11px] tracking-widest ml-2 font-mono font-bold transition-colors ${isCountdown ? 'text-amber-400 animate-pulse' : 'text-white/40'}`}>
                 {fmtTime(displayTime)}
               </span>
             </div>
-
-            {/* Vehicle name */}
-            <span className="text-white/60 text-[11px] tracking-[2px] uppercase">
-              {sim.vehicle?.name ?? 'No Vehicle'}
-            </span>
-
-            {/* Date */}
-            <span className="text-white/40 text-[11px] tracking-wider">
-              {sim.getCurrentDate().toUTCString().slice(0, 25)}
-            </span>
+            <span className="text-white/60 text-[11px] tracking-[2px] uppercase">{sim.vehicle?.name ?? 'No Vehicle'}</span>
+            <span className="text-white/40 text-[11px] tracking-wider">{sim.getCurrentDate().toUTCString().slice(0, 25)}</span>
           </div>
 
           {/* BOTTOM FLIGHT DATA STRIP */}
           <div className="absolute bottom-0 left-0 right-0 h-14 flex items-center justify-between px-8">
-            {/* Altitude */}
-            <StatBlock
-              label="Altitude"
-              value={alt !== null ? (alt * SIM_TO_M >= 1e6 ? (alt * SIM_TO_M / 1000).toFixed(1) : (alt * SIM_TO_M).toFixed(0)) : '—'}
-              unit={alt !== null ? (alt * SIM_TO_M >= 1e6 ? 'km' : 'm') : ''}
-              accent="#32d2ff"
-            />
-
-            {/* Vertical speed */}
-            <StatBlock
-              label="Vert. Speed"
-              value={vspeed !== null ? (vspeed >= 0 ? '+' : '') + fmtSpeed(Math.abs(vspeed)).split(' ')[0] : '—'}
-              unit={vspeed !== null ? (Math.abs(vspeed) * SIM_TO_M >= 1000 ? 'km/s' : 'm/s') : ''}
-              accent={vspeed !== null && vspeed >= 0 ? '#4ade80' : '#f87171'}
-            />
-
-            {/* Horizontal speed */}
-            <StatBlock
-              label="Horiz. Speed"
-              value={hspeed !== null ? fmtSpeed(hspeed).split(' ')[0] : '—'}
-              unit={hspeed !== null ? (hspeed * SIM_TO_M >= 1000 ? 'km/s' : 'm/s') : ''}
-              accent="#a78bfa"
-            />
-
-            {/* Heading */}
+            <StatBlock label="Altitude" value={alt !== null ? (alt * SIM_TO_M >= 1e6 ? (alt * SIM_TO_M / 1000).toFixed(1) : (alt * SIM_TO_M).toFixed(0)) : '—'} unit={alt !== null ? (alt * SIM_TO_M >= 1e6 ? 'km' : 'm') : ''} accent="#32d2ff" />
+            <StatBlock label="Vert. Speed" value={vspeed !== null ? (vspeed >= 0 ? '+' : '') + fmtSpeed(Math.abs(vspeed)).split(' ')[0] : '—'} unit={vspeed !== null ? (Math.abs(vspeed) * SIM_TO_M >= 1000 ? 'km/s' : 'm/s') : ''} accent={vspeed !== null && vspeed >= 0 ? '#4ade80' : '#f87171'} />
+            <StatBlock label="Horiz. Speed" value={hspeed !== null ? fmtSpeed(hspeed).split(' ')[0] : '—'} unit={hspeed !== null ? (hspeed * SIM_TO_M >= 1000 ? 'km/s' : 'm/s') : ''} accent="#a78bfa" />
             <StatBlock label="Heading" value={headingDeg.toFixed(0)} unit="°" accent="#fbbf24" />
-
-            {/* Dominant body */}
             <StatBlock label="SOI Body" value={dom?.name ?? '—'} accent="#fb923c" />
-
-            {/* Thrust indicator */}
             <div className="flex flex-col gap-0.5 items-end">
               <span className="text-[9px] uppercase tracking-[2px] font-bold text-white/40">Thrust</span>
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${thrustOn ? 'border-emerald-400/40 bg-emerald-400/10' : 'border-white/10 bg-white/5'}`}>
                 {thrustOn && <div className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />}
-                <span className={`font-mono text-[11px] font-bold ${thrustOn ? 'text-emerald-400' : 'text-white/30'}`}>
-                  {thrustOn ? 'ACTIVE' : 'OFF'}
-                </span>
+                <span className={`font-mono text-[11px] font-bold ${thrustOn ? 'text-emerald-400' : 'text-white/30'}`}>{thrustOn ? 'ACTIVE' : 'OFF'}</span>
               </div>
             </div>
-
-            {/* Autopilot */}
             <div className="flex flex-col gap-0.5 items-end">
               <span className="text-[9px] uppercase tracking-[2px] font-bold text-white/40">Autopilot</span>
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${sim.isAutopilotActive ? 'border-sky-400/40 bg-sky-400/10' : 'border-white/10 bg-white/5'}`}>
                 {sim.isAutopilotActive && <div className="w-1 h-1 rounded-full bg-sky-400 animate-pulse" />}
-                <span className={`font-mono text-[11px] font-bold ${sim.isAutopilotActive ? 'text-sky-400' : 'text-white/30'}`}>
-                  {sim.isAutopilotActive ? 'ENGAGED' : 'STANDBY'}
-                </span>
+                <span className={`font-mono text-[11px] font-bold ${sim.isAutopilotActive ? 'text-sky-400' : 'text-white/30'}`}>{sim.isAutopilotActive ? 'ENGAGED' : 'STANDBY'}</span>
               </div>
             </div>
           </div>
 
-          {/* AUTOPILOT LOG PANEL — bottom left, above the bar */}
+          {/* AUTOPILOT LOG PANEL */}
           {autopilotLogs.length > 0 && (
-            <div className="absolute bottom-16 left-8 w-[360px] max-h-[200px] overflow-hidden flex flex-col">
-              <div className="flex flex-col gap-0.5 overflow-y-auto" style={{ maskImage: 'linear-gradient(to bottom, transparent, black 20%)' }}>
-                {autopilotLogs.slice(-12).map((log, i) => (
-                  <div key={i} className="flex gap-2 items-baseline">
-                    <span className="text-[9px] text-sky-400/50 shrink-0 font-mono">[{fmtTime(log.time)}]</span>
-                    <span className="text-[10px] text-white/70 font-mono leading-relaxed">{log.msg}</span>
-                  </div>
+            <div className="absolute bottom-16 left-8 w-[400px] max-h-[300px] overflow-hidden flex flex-col">
+              <div className="flex flex-col gap-0.5 overflow-y-auto pr-4 scrollbar-hide" style={{ maskImage: 'linear-gradient(to bottom, transparent, black 15%)' }}>
+                {autopilotLogs.map((log, i) => (
+                  <LogLine key={i} log={log} />
                 ))}
-                <div ref={logsEndRef} />
+                <div ref={logsEndRef} className="h-2" />
               </div>
             </div>
           )}
-
-
         </motion.div>
       )}
     </AnimatePresence>

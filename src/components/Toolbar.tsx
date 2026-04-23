@@ -193,7 +193,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     return () => clearInterval(interval);
   }, [sim, paused, timeScale, timeUnit, displayZoom]);
 
-  const togglePause = () => {
+  const togglePause = (e: React.PointerEvent | React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     sim.paused = !sim.paused;
     setPaused(sim.paused);
   };
@@ -233,9 +235,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     return (
       <button
-        onClick={onClick}
+        onPointerDown={onClick}
         onContextMenu={onContextMenu}
-        className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border transition-all duration-200 outline-none aspect-square ${colors[color]}`}
+        className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border transition-all duration-100 outline-none aspect-square touch-none select-none ${colors[color]}`}
         title={title}
       >
         {children}
@@ -298,7 +300,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           {/* TIME CONTROLS */}
           <div className="flex items-center gap-3">
             <DockButton active={!paused} onClick={togglePause} title={paused ? 'Resume Simulation' : 'Pause Simulation'}>
-              {paused ? <Play size={18} className="fill-current text-green-500" /> : <Pause size={18} className="fill-current text-blue-500" />}
+              <div className="pointer-events-none">
+                {paused ? <Play size={18} className="fill-current text-green-500" /> : <Pause size={18} className="fill-current text-blue-500" />}
+              </div>
             </DockButton>
 
             <div className="flex items-center gap-2 bg-white/5 rounded-xl px-2 py-1 border border-white/5 h-11 select-none shadow-inner">

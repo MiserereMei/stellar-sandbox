@@ -16,6 +16,7 @@ export interface Body {
 import { Vehicle } from './Vehicle';
 import { AutopilotSandbox } from './AutopilotSandbox';
 import orbitScript from '../scripts/autopilot/auto-orbit.js?raw';
+import artemisScript from '../scripts/autopilot/artemis-2.js?raw';
 
 export class Simulation {
   bodies: Body[] = [];
@@ -42,6 +43,7 @@ export class Simulation {
   previewVelocityVector: { start: Vector2, end: Vector2 } | null = null;
   orbitPreview: { parentId: string, mousePos: Vector2 } | null = null;
   rulerStartPoint: Vector2 | null = null;
+  rulerEndPoint: Vector2 | null = null;
   mouseWorldPos: Vector2 = { x: 0, y: 0 };
 
   creationTemplate: { presetType: 'star' | 'planet' | 'moon' | 'comet' | 'blackhole' | 'rocket' | 'heatProtectedRocket' } = { presetType: 'planet' };
@@ -219,7 +221,7 @@ export class Simulation {
     // G is scaled so that 1 sim-second = 1 real-world second.
     // T = 31557600s (1 year). R = 23481. M = 333000. 
     // G = 4 * pi^2 * R^3 / (T^2 * M) = 1.541e-6
-    this.G = 1.541e-6; 
+    this.G = 1.541e-6;
     const sunId = generateId();
     this.timeScale = 1.0; // Scaled time for standard physics
     this.secondsPerSimSecond = 1.0; // 1 sim-sec = exactly 1 real second!
@@ -238,13 +240,13 @@ export class Simulation {
     // Radii are in Earth Radii (Earth = 1.0) so UI is 1:1 perfect.
     const planetsData = [
       { name: 'Mercury', x: -1.40728e-01, y: -4.43900e-01, vx: 2.11688e-02, vy: -7.09797e-03, mass: 0.055, r: 0.38, color: 'hsl(0, 0%, 60%)' },
-      { name: 'Venus',   x: -7.18630e-01, y: -2.25038e-02, vx: 5.13532e-04, vy: -2.03061e-02, mass: 0.815, r: 0.95, color: 'hsl(30, 80%, 70%)' },
-      { name: 'Earth',   x: -1.68524e-01, y: 9.68783e-01,  vx: -1.72339e-02, vy: -3.00766e-03, mass: 1.0, r: 1.0, color: 'hsl(210, 80%, 60%)' },
-      { name: 'Mars',    x: 1.39036e+00,  y: -2.10097e-02, vx: 7.47927e-04, vy: 1.51862e-02, mass: 0.107, r: 0.53, color: 'hsl(0, 80%, 50%)' },
-      { name: 'Jupiter', x: 4.00346e+00,  y: 2.93535e+00,  vx: -4.56375e-03, vy: 6.44727e-03, mass: 317.8, r: 11.2, color: 'hsl(20, 60%, 60%)' },
-      { name: 'Saturn',  x: 6.40855e+00,  y: 6.56804e+00,  vx: -4.29054e-03, vy: 3.89199e-03, mass: 95.2, r: 9.4, color: 'hsl(40, 50%, 70%)' },
-      { name: 'Uranus',  x: 1.44305e+01,  y: -1.37356e+01, vx: 2.67846e-03, vy: 2.67242e-03, mass: 14.5, r: 4.0, color: 'hsl(180, 50%, 80%)' },
-      { name: 'Neptune', x: 1.68107e+01,  y: -2.49926e+01, vx: 2.57921e-03, vy: 1.77635e-03, mass: 17.1, r: 3.9, color: 'hsl(220, 70%, 60%)' },
+      { name: 'Venus', x: -7.18630e-01, y: -2.25038e-02, vx: 5.13532e-04, vy: -2.03061e-02, mass: 0.815, r: 0.95, color: 'hsl(30, 80%, 70%)' },
+      { name: 'Earth', x: -1.68524e-01, y: 9.68783e-01, vx: -1.72339e-02, vy: -3.00766e-03, mass: 1.0, r: 1.0, color: 'hsl(210, 80%, 60%)' },
+      { name: 'Mars', x: 1.39036e+00, y: -2.10097e-02, vx: 7.47927e-04, vy: 1.51862e-02, mass: 0.107, r: 0.53, color: 'hsl(0, 80%, 50%)' },
+      { name: 'Jupiter', x: 4.00346e+00, y: 2.93535e+00, vx: -4.56375e-03, vy: 6.44727e-03, mass: 317.8, r: 11.2, color: 'hsl(20, 60%, 60%)' },
+      { name: 'Saturn', x: 6.40855e+00, y: 6.56804e+00, vx: -4.29054e-03, vy: 3.89199e-03, mass: 95.2, r: 9.4, color: 'hsl(40, 50%, 70%)' },
+      { name: 'Uranus', x: 1.44305e+01, y: -1.37356e+01, vx: 2.67846e-03, vy: 2.67242e-03, mass: 14.5, r: 4.0, color: 'hsl(180, 50%, 80%)' },
+      { name: 'Neptune', x: 1.68107e+01, y: -2.49926e+01, vx: 2.57921e-03, vy: 1.77635e-03, mass: 17.1, r: 3.9, color: 'hsl(220, 70%, 60%)' },
     ];
 
     planetsData.forEach(p => {
@@ -256,8 +258,8 @@ export class Simulation {
 
       this.bodies.push({
         id, name: p.name, mass: p.mass, radius: p.r, color: p.color,
-        position: { x: posX, y: posY }, 
-        velocity: { x: velX, y: velY }, 
+        position: { x: posX, y: posY },
+        velocity: { x: velX, y: velY },
         trail: []
       });
 
@@ -266,15 +268,15 @@ export class Simulation {
         const mV = Math.sqrt(this.G * p.mass / mDist);
         this.bodies.push({
           id: generateId(), name: 'Moon', mass: 0.0123, radius: 0.27, color: 'hsl(0, 0%, 80%)',
-          position: { x: posX + mDist, y: posY }, 
-          velocity: { x: velX, y: velY + mV }, 
+          position: { x: posX + mDist, y: posY },
+          velocity: { x: velX, y: velY + mV },
           trail: []
         });
       }
     });
 
     this.camera.x = 0; this.camera.y = 0;
-    this.camera.zoom = 0.03; 
+    this.camera.zoom = 0.03;
     this.camera.followingId = sunId;
   }
 
@@ -293,7 +295,7 @@ export class Simulation {
     const starId = generateId();
     const starMass = system.star.mass * SOLAR_MASS;
     const starRadius = system.star.radius * SOLAR_RADIUS;
-    
+
     // Get color based on temperature
     let starColor = 'hsl(45, 100%, 50%)';
     if (system.star.temp < 3700) starColor = 'hsl(10, 100%, 60%)'; // M-Dwarf
@@ -301,46 +303,46 @@ export class Simulation {
     else if (system.star.temp > 7500) starColor = 'hsl(200, 100%, 80%)'; // A/B-Type
 
     this.bodies.push({
-        id: starId,
-        name: system.name,
-        mass: starMass,
-        radius: Math.max(5, starRadius), // Minimum visual size
-        color: starColor,
-        position: { x: 0, y: 0 },
-        velocity: { x: 0, y: 0 },
-        trail: []
+      id: starId,
+      name: system.name,
+      mass: starMass,
+      radius: Math.max(5, starRadius), // Minimum visual size
+      color: starColor,
+      position: { x: 0, y: 0 },
+      velocity: { x: 0, y: 0 },
+      trail: []
     });
 
     system.planets.forEach((p: any) => {
-        if (p.semimajoraxis <= 0) return;
-        const dist = p.semimajoraxis * AU;
-        const mass = p.mass > 0 ? p.mass * JUPITER_MASS : 1.0; 
-        const radius = p.radius > 0 ? p.radius * JUPITER_RADIUS : 1.0;
-        
-        const v = Math.sqrt((this.G * starMass) / dist);
-        const ecc = p.eccentricity || 0;
-        const rp = dist * (1 - ecc);
-        const vp = v * Math.sqrt((1 + ecc) / (1 - ecc));
+      if (p.semimajoraxis <= 0) return;
+      const dist = p.semimajoraxis * AU;
+      const mass = p.mass > 0 ? p.mass * JUPITER_MASS : 1.0;
+      const radius = p.radius > 0 ? p.radius * JUPITER_RADIUS : 1.0;
 
-        // Visual radius scaling balanced for the new 200x zoom
-        const visualRadius = Math.max(8, radius * 1.5); 
+      const v = Math.sqrt((this.G * starMass) / dist);
+      const ecc = p.eccentricity || 0;
+      const rp = dist * (1 - ecc);
+      const vp = v * Math.sqrt((1 + ecc) / (1 - ecc));
 
-        this.bodies.push({
-            id: generateId(),
-            name: p.name,
-            mass: mass,
-            radius: visualRadius,
-            color: p.temperature > 300 ? 'hsl(20, 70%, 50%)' : 'hsl(200, 70%, 50%)',
-            position: { x: rp, y: 0 },
-            velocity: { x: 0, y: vp },
-            trail: []
-        });
+      // Visual radius scaling balanced for the new 200x zoom
+      const visualRadius = Math.max(8, radius * 1.5);
+
+      this.bodies.push({
+        id: generateId(),
+        name: p.name,
+        mass: mass,
+        radius: visualRadius,
+        color: p.temperature > 300 ? 'hsl(20, 70%, 50%)' : 'hsl(200, 70%, 50%)',
+        position: { x: rp, y: 0 },
+        velocity: { x: 0, y: vp },
+        trail: []
+      });
     });
 
     this.camera.followingId = starId;
     this.camera.x = 0;
     this.camera.y = 0;
-    
+
     // HUGE FIX: Zoom was 200x too small. Setting it to a usable scale.
     // 1 AU should be around 250-500 pixels for a "close" start.
     const innerA = system.planets[0]?.semimajoraxis || 1.0;
@@ -455,7 +457,7 @@ export class Simulation {
   public targetLaunchTime: number | null = null;
   public launchEpoch: number | null = null;
   public activeBoosters: { thrust: number, endTime: number, cbId?: number }[] = [];
-  
+
   public cinematicCamera = {
     active: false,
     zoomScale: -1,
@@ -476,18 +478,17 @@ export class Simulation {
 
   private sandbox: AutopilotSandbox = new AutopilotSandbox();
   public autopilotLog: (msg: string) => void = () => { };
+  public baseDateMs: number = 946728000000; // Default J2000: Jan 1, 2000
 
   getCurrentDate(): Date {
-    // Base J2000 epoch: Jan 1, 2000 12:00:00 UTC = 946728000000 ms
-    const baseDate = 946728000000;
-    return new Date(baseDate + (this.missionTime * this.secondsPerSimSecond * 1000));
+    return new Date(this.baseDateMs + (this.missionTime * this.secondsPerSimSecond * 1000));
   }
 
   jumpToDateAsync(targetDate: Date, precision: 'fast' | 'high' | 'ultra' = 'high', onProgress: (p: number) => void, onComplete: () => void) {
     const targetTimeMs = targetDate.getTime();
     const currentTimeMs = this.getCurrentDate().getTime();
     const diffMs = targetTimeMs - currentTimeMs;
-    
+
     if (Math.abs(diffMs) < 1000) {
       onComplete();
       return;
@@ -496,24 +497,24 @@ export class Simulation {
     const diffSimSeconds = (diffMs / 1000) / this.secondsPerSimSecond;
     const direction = Math.sign(diffSimSeconds);
     const totalSecondsToSimulate = Math.abs(diffSimSeconds);
-    
+
     // Select step size based on precision
     let stepSize = 1000; // default (high)
     if (precision === 'fast') stepSize = 3600; // 1 hour steps
     if (precision === 'ultra') stepSize = 60;   // 1 minute steps (extremely precise)
 
-    const stepDt = stepSize * direction; 
+    const stepDt = stepSize * direction;
     const totalSteps = Math.ceil(totalSecondsToSimulate / Math.abs(stepDt));
-    
+
     let currentStep = 0;
-    const stepsPerChunk = 100000; 
-    
+    const stepsPerChunk = 100000;
+
     const originalPaused = this.paused;
-    this.paused = true; 
-    this.isJumping = true; 
+    this.paused = true;
+    this.isJumping = true;
     this.cancelJump = false;
     this.jumpProgress = 0;
-    
+
     // Clear trails before jumping so we don't draw lines across the universe
     this.bodies.forEach(b => b.trail = []);
 
@@ -525,9 +526,9 @@ export class Simulation {
       currentStep += stepsToDo;
       this.missionTime += (stepsToDo * stepDt);
       this.jumpProgress = currentStep / totalSteps;
-      
+
       onProgress(this.jumpProgress);
-      
+
       if (this.cancelJump) {
         this.paused = originalPaused;
         this.isJumping = false;
@@ -535,7 +536,7 @@ export class Simulation {
         onComplete();
         return;
       }
-      
+
       if (currentStep < totalSteps) {
         setTimeout(chunk, 0); // Decouple from 60fps to calculate as fast as CPU allows
       } else {
@@ -545,7 +546,7 @@ export class Simulation {
         onComplete();
       }
     };
-    
+
     this.pendingJump = () => setTimeout(chunk, 0);
   }
 
@@ -596,13 +597,13 @@ export class Simulation {
   startAutopilot(script: string, logCallback: (msg: string) => void) {
     this.autopilotLog = logCallback;
     this.missionTime = 0;
-    
+
     this.sandbox.onCommand = (command: string, args: any[]) => {
       if (command === 'init_success') {
         this.isAutopilotActive = true;
         this.paused = false; // Ensure simulation unpauses when autopilot engages
         if (args[0] && this.targetLaunchTime === null) {
-            this.targetLaunchTime = 0; // Auto-schedule for T-0 if script has onLaunch but didn't call setLaunchTime
+          this.targetLaunchTime = 0; // Auto-schedule for T-0 if script has onLaunch but didn't call setLaunchTime
         }
         return;
       }
@@ -637,17 +638,17 @@ export class Simulation {
           const utter = new SpeechSynthesisUtterance(String(args[0]));
           const options = args[1];
           utter.lang = options?.lang ?? 'en-US';
-          
+
           // Dynamic Audio Effects based on simulation speed
           const baseRate = options?.rate ?? 1.0;
           const basePitch = options?.pitch ?? 1.0;
           const ts = Math.abs(this.timeScale);
-          
+
           // Scale rate linearly, clamp to Web Speech API limits [0.1, 10]
           utter.rate = Math.max(0.1, Math.min(10, baseRate * ts));
           // Keep pitch constant as per user preference
           utter.pitch = basePitch;
-          
+
           utter.volume = options?.volume ?? 1.0;
           if (args[2]) {
             utter.onend = () => args[2]();
@@ -700,7 +701,7 @@ export class Simulation {
     this.sandbox.onError = (err) => {
       this.autopilotLog(err);
       if (err.includes('Init Error') || err.includes('Compilation Error')) {
-          this.stopAutopilot();
+        this.stopAutopilot();
       }
     };
 
@@ -758,8 +759,10 @@ export class Simulation {
 
   loadArtemis2Mission() {
     this.clear();
-    this.timeScale = 300;
-    this.G = 1.541e-6;
+    this.timeScale = 1;
+    this.G = 1.541e-6; // G for Earth Radius=1, Earth Mass=1 units
+    // April 1, 2026 at 22:35 UTC = 1775082912000 ms
+    this.baseDateMs = 1775082912000; 
 
     const earthId = generateId();
     this.bodies.push({
@@ -767,39 +770,56 @@ export class Simulation {
       position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
     });
 
-    const mDist = 60; // Real-scale distance ~60 Earth radii
+    // Real data for April 1, 2026 (Launch Date)
+    const mDist = 61.19; // ~389,876 km
+    const moonAngle = 177 * (Math.PI / 180); 
     const mV = Math.sqrt(this.G * 1.0 / mDist);
+    const moonId = generateId();
     this.bodies.push({
-      id: generateId(), name: 'Moon', mass: 0.0123, radius: 0.273, color: 'hsl(0, 0%, 80%)',
-      position: { x: mDist, y: 0 }, velocity: { x: 0, y: mV }, trail: []
+      id: moonId, name: 'Moon', mass: 0.0123, radius: 0.273, color: 'hsl(0, 0%, 80%)',
+      position: { x: Math.cos(moonAngle) * mDist, y: Math.sin(moonAngle) * mDist },
+      velocity: { x: -Math.sin(moonAngle) * mV, y: Math.cos(moonAngle) * mV },
+      trail: []
     });
 
-    // Deploy Rocket on Earth surface (North Pole for simplicity)
+    // Start Orion on the surface of Earth (North Pole)
     this.creationTemplate = { presetType: 'rocket' };
     const meta = this.getBodyMetadataFromPreset();
-    const rocket = this.addBody(0, -(1.0 + meta.radius));
-    if (rocket) {
-      this.vehicle = rocket as any;
-      (this.vehicle as any).parentBodyId = earthId;
-      (this.vehicle as any).relativeOffset = { x: 0, y: -(1.0 + meta.radius) };
-      (this.vehicle as any).rotation = -Math.PI / 2;
-      this.camera.followingId = rocket.id;
-      this.camera.zoom = 100;
-    }
+    const surfaceAlt = 1.0 + meta.radius;
 
-    this.currentScript = `// Artemis 2 Mission Script
-// Objective: Lunar Flyby and Return.
+    this.vehicle = {
+      id: generateId(),
+      name: 'Orion (Artemis II)',
+      mass: meta.mass,
+      radius: meta.radius,
+      length: meta.length || meta.radius * 2,
+      color: meta.color,
+      position: { x: 0, y: -surfaceAlt },
+      velocity: { x: 0, y: 0 },
+      trail: [],
+      type: 'rocket',
+      rotation: -Math.PI / 2, // Upright
+      angularVelocity: 0,
+      isHeatProtected: true,
+      thrustPower: meta.thrustPower || 0.1, // Stronger thrust for launch
+      maxKineticEnergy: 100000
+    };
 
-function autopilotStep(t, fc) {
-    // Write your Artemis 2 logic here
-}`;
+    (this.vehicle as any).parentBodyId = earthId;
+    (this.vehicle as any).relativeOffset = { x: 0, y: -surfaceAlt };
+
+    this.bodies.push(this.vehicle);
+    this.camera.followingId = this.vehicle.id;
+    this.camera.zoom = 2000000;
+
+    this.currentScript = artemisScript;
   }
 
   loadRocketOnEarth() {
     this.clear();
     this.paused = true;
     this.G = 1.541e-6; // Realistic G for Earth=1.0 scale
-    
+
     const earthId = generateId();
     const earthRadius = 1.0;
     this.bodies.push({
@@ -815,7 +835,7 @@ function autopilotStep(t, fc) {
 
     this.creationTemplate = { presetType: 'rocket' };
     const meta = this.getBodyMetadataFromPreset();
-    
+
     this.vehicle = {
       id: generateId(),
       name: 'Rocket',
@@ -833,11 +853,11 @@ function autopilotStep(t, fc) {
       thrustPower: meta.thrustPower || 0.05,
       maxKineticEnergy: meta.maxKineticEnergy || 50000
     };
-    
+
     (this.vehicle as any).parentBodyId = earthId;
     (this.vehicle as any).relativeOffset = { x: 0, y: -earthRadius - meta.radius };
     this.bodies.push(this.vehicle);
-    
+
     this.camera.followingId = this.vehicle.id;
     this.camera.zoom = 2000000; // Ultra-high zoom for realistic scale rocket visibility
   }
@@ -870,7 +890,7 @@ function autopilotStep(t, fc) {
         }
         this.stepPhysics(stepDt);
       }
-      
+
       this.trailAccumulator += Math.abs(safeDt);
       if (this.trailAccumulator > 0.05 * Math.max(1, this.timeScale / 1000)) {
         this.updateTrails();
@@ -892,308 +912,332 @@ function autopilotStep(t, fc) {
 
   stepPhysics(stepDt: number) {
 
-        // Autopilot Execution
-        if (this.isAutopilotActive) {
-          if (!this.vehicle) {
-            this.autopilotLog("Cannot communicate with ship.");
-            this.stopAutopilot();
-          } else {
-          const METER_PER_UNIT = 6371000;
-          const KG_PER_UNIT_MASS = 5.972e24;
+    // Autopilot Execution
+    if (this.isAutopilotActive) {
+      if (!this.vehicle) {
+        this.autopilotLog("Cannot communicate with ship.");
+        this.stopAutopilot();
+      } else {
+        const METER_PER_UNIT = 6371000;
+        const KG_PER_UNIT_MASS = 5.972e24;
 
-          const formatBody = (b: Body) => {
-            const dx = b.position.x - this.vehicle!.position.x;
-            const dy = b.position.y - this.vehicle!.position.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            return {
-              id: b.id,
-              name: b.name,
-              mass: b.mass * KG_PER_UNIT_MASS,
-              circumference: 2 * Math.PI * b.radius * METER_PER_UNIT,
-              relativeX: dx * METER_PER_UNIT,
-              relativeY: dy * METER_PER_UNIT,
-              distance: dist * METER_PER_UNIT,
-              angle: Math.atan2(dy, dx) * (180 / Math.PI)
-            };
+        const formatBody = (b: Body) => {
+          const dx = b.position.x - this.vehicle!.position.x;
+          const dy = b.position.y - this.vehicle!.position.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          return {
+            id: b.id,
+            name: b.name,
+            mass: b.mass * KG_PER_UNIT_MASS,
+            circumference: 2 * Math.PI * b.radius * METER_PER_UNIT,
+            relativeX: dx * METER_PER_UNIT,
+            relativeY: dy * METER_PER_UNIT,
+            distance: dist * METER_PER_UNIT,
+            angle: Math.atan2(dy, dx) * (180 / Math.PI)
           };
+        };
 
-          const dom = this.getDominantBody(this.vehicle.position);
-          let gravitySim = 0;
-          let horizonAngle = 0;
-          let progradeAngle = 0;
+        const dom = this.getDominantBody(this.vehicle.position);
+        let gravitySim = 0;
+        let horizonAngle = 0;
+        let progradeAngle = 0;
 
+        if (dom) {
+          const dx = dom.position.x - this.vehicle.position.x;
+          const dy = dom.position.y - this.vehicle.position.y;
+          const distSq = dx * dx + dy * dy;
+          gravitySim = (this.G * dom.mass) / Math.max(0.0001, distSq);
+          horizonAngle = (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
+
+          const rvx = this.vehicle.velocity.x - dom.velocity.x;
+          const rvy = this.vehicle.velocity.y - dom.velocity.y;
+          progradeAngle = Math.atan2(rvy, rvx) * (180 / Math.PI);
+        }
+
+        const fcState = {
+          thrust: (this.vehicle as any).thrusting ? 1.0 : 0.0,
+          rotate: (this.vehicle as any).rotatingLeft ? -1.0 : ((this.vehicle as any).rotatingRight ? 1.0 : 0.0),
+          rotation: this.vehicle.rotation * (180 / Math.PI),
+          angularVelocity: this.vehicle.angularVelocity * (180 / Math.PI),
+          altitude: this.getAltitude(),
+          relativeSpeed: this.getRelativeSpeed(),
+          radialSpeed: this.getRadialSpeed(),
+          tangentialSpeed: this.getTangentialSpeed(),
+          dominantBody: dom ? formatBody(dom) : null,
+          vehicle: formatBody(this.vehicle),
+          bodies: this.bodies.map(formatBody),
+          gravityMagnitude: gravitySim / 1.541e-6,
+          horizonAngle,
+          progradeAngle,
+          verticalSpeed: this.getRadialSpeed(),
+          horizontalSpeed: this.getTangentialSpeed()
+        };
+
+        // Check if we've reached the scheduled launch time
+        if (this.targetLaunchTime !== null && this.missionTime >= this.targetLaunchTime) {
+          this.launchEpoch = this.missionTime; // Record exact T-0
+          this.autopilotLog(`T-0! Launch sequence initiated at T+${this.missionTime.toFixed(1)}s`);
+          this.sandbox.launch(fcState);
+          this.targetLaunchTime = null; // fire once
+        }
+
+        this.sandbox.step(this.missionTime, fcState);
+      }
+    }
+
+    // Vehicle controls
+    if (this.vehicle) {
+      const v = this.vehicle;
+      // Apply angular momentum
+      const torque = this.isAutopilotActive ? 5.0 : 5.0 / Math.max(1, this.timeScale);
+      if (this.isAutopilotActive) {
+        let rotAmount = (v as any).rotationAmount || 0;
+
+        // Auto-alignment logic for setPitch
+        const targetPitch = (v as any).targetPitch;
+        if (targetPitch !== undefined && targetPitch !== null) {
+          const dom = this.getDominantBody(v.position);
           if (dom) {
-            const dx = dom.position.x - this.vehicle.position.x;
-            const dy = dom.position.y - this.vehicle.position.y;
-            const distSq = dx * dx + dy * dy;
-            gravitySim = (this.G * dom.mass) / Math.max(0.0001, distSq);
-            horizonAngle = (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
-            
-            const rvx = this.vehicle.velocity.x - dom.velocity.x;
-            const rvy = this.vehicle.velocity.y - dom.velocity.y;
-            progradeAngle = Math.atan2(rvy, rvx) * (180 / Math.PI);
-          }
+            // Horizon is perpendicular to the vector from planet center
+            const dx = dom.position.x - v.position.x;
+            const dy = dom.position.y - v.position.y;
+            const horizonBase = (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
+            const absoluteTarget = horizonBase + targetPitch;
 
-          const fcState = {
-            thrust: (this.vehicle as any).thrusting ? 1.0 : 0.0,
-            rotate: (this.vehicle as any).rotatingLeft ? -1.0 : ((this.vehicle as any).rotatingRight ? 1.0 : 0.0),
-            rotation: this.vehicle.rotation * (180 / Math.PI),
-            angularVelocity: this.vehicle.angularVelocity * (180 / Math.PI),
-            altitude: this.getAltitude(),
-            relativeSpeed: this.getRelativeSpeed(),
-            radialSpeed: this.getRadialSpeed(),
-            tangentialSpeed: this.getTangentialSpeed(),
-            dominantBody: dom ? formatBody(dom) : null,
-            vehicle: formatBody(this.vehicle),
-            bodies: this.bodies.map(formatBody),
-            gravityMagnitude: gravitySim / 1.541e-6,
-            horizonAngle,
-            progradeAngle,
-            verticalSpeed: this.getRadialSpeed(),
-            horizontalSpeed: this.getTangentialSpeed()
-          };
+            let angleDiff = absoluteTarget - (v.rotation * (180 / Math.PI));
+            while (angleDiff > 180) angleDiff -= 360;
+            while (angleDiff < -180) angleDiff += 360;
 
-          // Check if we've reached the scheduled launch time
-          if (this.targetLaunchTime !== null && this.missionTime >= this.targetLaunchTime) {
-            this.launchEpoch = this.missionTime; // Record exact T-0
-            this.autopilotLog(`T-0! Launch sequence initiated at T+${this.missionTime.toFixed(1)}s`);
-            this.sandbox.launch(fcState);
-            this.targetLaunchTime = null; // fire once
-          }
-          
-          this.sandbox.step(this.missionTime, fcState);
+            // PD Controller for smooth alignment
+            const p = 0.05;
+            const d = 0.15;
+            rotAmount = angleDiff * p - (v.angularVelocity * (180 / Math.PI)) * d;
+            rotAmount = Math.max(-1, Math.min(1, rotAmount));
           }
         }
 
-        // Vehicle controls
-        if (this.vehicle) {
-          const v = this.vehicle;
-          // Apply angular momentum
-          const torque = this.isAutopilotActive ? 5.0 : 5.0 / Math.max(1, this.timeScale);
-          if (this.isAutopilotActive) {
-            const rotAmount = (v as any).rotationAmount || 0;
-            v.angularVelocity += rotAmount * torque * stepDt;
-          } else {
-            if ((v as any).rotatingLeft) v.angularVelocity -= torque * stepDt;
-            if ((v as any).rotatingRight) v.angularVelocity += torque * stepDt;
-          }
+        v.angularVelocity += rotAmount * torque * stepDt;
+      } else {
+        if ((v as any).rotatingLeft) v.angularVelocity -= torque * stepDt;
+        if ((v as any).rotatingRight) v.angularVelocity += torque * stepDt;
+      }
 
-          // Friction: light damping for angular stability
-          v.angularVelocity *= Math.pow(0.1, stepDt); 
+      // Friction: light damping for angular stability
+      v.angularVelocity *= Math.pow(0.1, stepDt);
 
-          v.rotation += v.angularVelocity * stepDt;
+      v.rotation += v.angularVelocity * stepDt;
 
 
-          // Apply thrust
-          let totalAcceleration = 0;
-          if (this.isAutopilotActive) {
-            const thrustAmount = (v as any).thrustAmount || 0;
-            // Force a minimum capable thrust for Artemis/SLS to ensure it can SSTO
-            const effectiveThrustPower = Math.max(v.thrustPower, 2.5e-6);
-            totalAcceleration += thrustAmount * effectiveThrustPower;
-          } else if ((v as any).thrusting) {
-            totalAcceleration += v.thrustPower;
-          }
+      // Apply thrust
+      let totalAcceleration = 0;
+      if (this.isAutopilotActive) {
+        const thrustAmount = (v as any).thrustAmount || 0;
+        // Force a minimum capable thrust for Artemis/SLS to ensure it can SSTO
+        const effectiveThrustPower = Math.max(v.thrustPower, 2.5e-6);
+        totalAcceleration += thrustAmount * effectiveThrustPower;
+      } else if ((v as any).thrusting) {
+        totalAcceleration += v.thrustPower;
+      }
 
-          // Apply booster thrusts
-          if (this.activeBoosters && this.activeBoosters.length > 0) {
-            const METER_PER_UNIT = 6371000;
-            const KG_PER_UNIT_MASS = 5.972e24;
-            const vehicleMassKg = v.mass * KG_PER_UNIT_MASS;
-            
-            for (let i = this.activeBoosters.length - 1; i >= 0; i--) {
-                const b = this.activeBoosters[i];
-                if (this.missionTime >= b.endTime) {
-                    if (b.cbId !== undefined && b.cbId !== null) {
-                        this.sandbox.fireCallback(b.cbId);
-                    }
-                    this.activeBoosters.splice(i, 1);
-                } else {
-                    const a_meters = b.thrust / vehicleMassKg;
-                    const a_sim = a_meters / METER_PER_UNIT;
-                    totalAcceleration += a_sim;
-                }
+      // Apply booster thrusts
+      if (this.activeBoosters && this.activeBoosters.length > 0) {
+        const METER_PER_UNIT = 6371000;
+        const KG_PER_UNIT_MASS = 5.972e24;
+        const vehicleMassKg = v.mass * KG_PER_UNIT_MASS;
+
+        for (let i = this.activeBoosters.length - 1; i >= 0; i--) {
+          const b = this.activeBoosters[i];
+          if (this.missionTime >= b.endTime) {
+            if (b.cbId !== undefined && b.cbId !== null) {
+              this.sandbox.fireCallback(b.cbId);
             }
-          }
-
-          if (totalAcceleration > 0) {
-            if ((v as any).parentBodyId) {
-              // BREAK FREE: Move a significant bit away from the surface to avoid immediate re-parenting by collision system
-              const parent = this.bodies.find(b => b.id === (v as any).parentBodyId);
-              if (parent) {
-                const dx = v.position.x - parent.position.x;
-                const dy = v.position.y - parent.position.y;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                // Nudge by 10% of rocket radius to ensure clear separation
-                const nudgeDist = (v.radius || 0.0001) * 0.1;
-                v.position.x += (dx / dist) * nudgeDist;
-                v.position.y += (dy / dist) * nudgeDist;
-              }
-            }
-            (v as any).parentBodyId = null;
-            (v as any).isLaunchingOrThrusting = true;
-            v.velocity.x += Math.cos(v.rotation) * totalAcceleration * stepDt;
-            v.velocity.y += Math.sin(v.rotation) * totalAcceleration * stepDt;
+            this.activeBoosters.splice(i, 1);
           } else {
-            (v as any).isLaunchingOrThrusting = false;
+            const a_meters = b.thrust / vehicleMassKg;
+            const a_sim = a_meters / METER_PER_UNIT;
+            totalAcceleration += a_sim;
           }
         }
+      }
 
-        // 1. Resolve Gravity & Forces (Global Frame for all bodies)
-        for (let i = 0; i < this.bodies.length; i++) {
-          const b1 = this.bodies[i];
-          // If rocket is parented (landed), it inherits motion and skip physics
-          if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) continue;
-
-          let ax = 0, ay = 0;
-          for (let j = 0; j < this.bodies.length; j++) {
-            if (i === j) continue;
-            const b2 = this.bodies[j];
-            const dx = b2.position.x - b1.position.x;
-            const dy = b2.position.y - b1.position.y;
-            const distSq = dx * dx + dy * dy;
-            const dist = Math.sqrt(distSq);
-            if (dist === 0) continue;
-            const isB2BH = this.isBodyBlackHole(b2);
-            const softening = Math.max(b1.radius, b2.radius);
-            let potentialDist = Math.max(dist, softening * 0.1);
-            if (isB2BH) potentialDist = Math.max(0.2, dist - b2.radius);
-            const force = this.G * b2.mass / (potentialDist * potentialDist);
-            ax += force * (dx / dist);
-            ay += force * (dy / dist);
-          }
-          b1.velocity.x += ax * stepDt;
-          b1.velocity.y += ay * stepDt;
-          const speedSq = b1.velocity.x * b1.velocity.x + b1.velocity.y * b1.velocity.y;
-          if (speedSq > this.C * this.C) {
-            const speed = Math.sqrt(speedSq);
-            b1.velocity.x = (b1.velocity.x / speed) * this.C;
-            b1.velocity.y = (b1.velocity.y / speed) * this.C;
+      if (totalAcceleration > 0) {
+        if ((v as any).parentBodyId) {
+          // BREAK FREE: Move a significant bit away from the surface to avoid immediate re-parenting by collision system
+          const parent = this.bodies.find(b => b.id === (v as any).parentBodyId);
+          if (parent) {
+            const dx = v.position.x - parent.position.x;
+            const dy = v.position.y - parent.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            // Nudge by 10% of rocket radius to ensure clear separation
+            const nudgeDist = (v.radius || 0.0001) * 0.1;
+            v.position.x += (dx / dist) * nudgeDist;
+            v.position.y += (dy / dist) * nudgeDist;
           }
         }
-        for (let i = 0; i < this.bodies.length; i++) {
-          const b1 = this.bodies[i];
+        (v as any).parentBodyId = null;
+        (v as any).isLaunchingOrThrusting = true;
+        v.velocity.x += Math.cos(v.rotation) * totalAcceleration * stepDt;
+        v.velocity.y += Math.sin(v.rotation) * totalAcceleration * stepDt;
+      } else {
+        (v as any).isLaunchingOrThrusting = false;
+      }
+    }
 
-          // Position Update
-          if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) {
-            const parent = this.bodies.find(b => b.id === (this.vehicle as any).parentBodyId);
-            if (parent) {
-              b1.position.x = parent.position.x + (this.vehicle as any).relativeOffset.x;
-              b1.position.y = parent.position.y + (this.vehicle as any).relativeOffset.y;
-              b1.velocity.x = parent.velocity.x;
-              b1.velocity.y = parent.velocity.y;
+    // 1. Resolve Gravity & Forces (Global Frame for all bodies)
+    for (let i = 0; i < this.bodies.length; i++) {
+      const b1 = this.bodies[i];
+      // If rocket is parented (landed), it inherits motion and skip physics
+      if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) continue;
+
+      let ax = 0, ay = 0;
+      for (let j = 0; j < this.bodies.length; j++) {
+        if (i === j) continue;
+        const b2 = this.bodies[j];
+        const dx = b2.position.x - b1.position.x;
+        const dy = b2.position.y - b1.position.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+        if (dist === 0) continue;
+        const isB2BH = this.isBodyBlackHole(b2);
+        const softening = Math.max(b1.radius, b2.radius);
+        let potentialDist = Math.max(dist, softening * 0.1);
+        if (isB2BH) potentialDist = Math.max(0.2, dist - b2.radius);
+        const force = this.G * b2.mass / (potentialDist * potentialDist);
+        ax += force * (dx / dist);
+        ay += force * (dy / dist);
+      }
+      b1.velocity.x += ax * stepDt;
+      b1.velocity.y += ay * stepDt;
+      const speedSq = b1.velocity.x * b1.velocity.x + b1.velocity.y * b1.velocity.y;
+      if (speedSq > this.C * this.C) {
+        const speed = Math.sqrt(speedSq);
+        b1.velocity.x = (b1.velocity.x / speed) * this.C;
+        b1.velocity.y = (b1.velocity.y / speed) * this.C;
+      }
+    }
+    for (let i = 0; i < this.bodies.length; i++) {
+      const b1 = this.bodies[i];
+
+      // Position Update
+      if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) {
+        const parent = this.bodies.find(b => b.id === (this.vehicle as any).parentBodyId);
+        if (parent) {
+          b1.position.x = parent.position.x + (this.vehicle as any).relativeOffset.x;
+          b1.position.y = parent.position.y + (this.vehicle as any).relativeOffset.y;
+          b1.velocity.x = parent.velocity.x;
+          b1.velocity.y = parent.velocity.y;
+        } else {
+          (this.vehicle as any).parentBodyId = null;
+          b1.position.x += b1.velocity.x * stepDt;
+          b1.position.y += b1.velocity.y * stepDt;
+        }
+      } else {
+        b1.position.x += b1.velocity.x * stepDt;
+        b1.position.y += b1.velocity.y * stepDt;
+      }
+
+
+      if (this.isBodyBlackHole(b1)) {
+        const rs = (2 * this.G * Math.abs(b1.mass)) / (this.C * this.C);
+        b1.radius = rs * 2.6;
+        b1.isBlackHole = true;
+      }
+    }
+    for (let i = 0; i < this.bodies.length; i++) {
+      const b1 = this.bodies[i];
+      if (b1.mass === 0) continue;
+      for (let j = i + 1; j < this.bodies.length; j++) {
+        const b2 = this.bodies[j];
+        if (b2.mass === 0) continue;
+        const dx = b2.position.x - b1.position.x;
+        const dy = b2.position.y - b1.position.y;
+        const distSq = dx * dx + dy * dy;
+        const isB1BH = this.isBodyBlackHole(b1);
+        const isB2BH = this.isBodyBlackHole(b2);
+        let captureRadius = b1.radius + b2.radius;
+        if (isB1BH) captureRadius = b1.radius * 0.99;
+        if (isB2BH) captureRadius = isB1BH ? Math.min(captureRadius, b2.radius * 0.99) : b2.radius * 0.99;
+        if (distSq < captureRadius * captureRadius) {
+          const bigger = b1.mass >= b2.mass ? b1 : b2;
+          const smaller = b1.mass >= b2.mass ? b2 : b1;
+
+          // Check if vehicle is involved in collision
+          if (this.vehicle && (b1.id === this.vehicle.id || b2.id === this.vehicle.id)) {
+            const vehicleBody = b1.id === this.vehicle.id ? b1 : b2;
+            const other = b1.id === this.vehicle.id ? b2 : b1;
+
+            if ((vehicleBody as any).parentBodyId === other.id) continue;
+
+            // If it's a black hole or extreme star, destroy rocket
+            if (this.isBodyBlackHole(other) || other.mass > 1000000) {
+              vehicleBody.mass = 0;
+              this.vehicle = null;
+              break;
             } else {
-              (this.vehicle as any).parentBodyId = null;
-              b1.position.x += b1.velocity.x * stepDt;
-              b1.position.y += b1.velocity.y * stepDt;
-            }
-          } else {
-            b1.position.x += b1.velocity.x * stepDt;
-            b1.position.y += b1.velocity.y * stepDt;
-          }
+              // Calculate relative speed for impact damage
+              const relVx = vehicleBody.velocity.x - other.velocity.x;
+              const relVy = vehicleBody.velocity.y - other.velocity.y;
+              const relSpeedSq = relVx * relVx + relVy * relVy;
 
-
-          if (this.isBodyBlackHole(b1)) {
-            const rs = (2 * this.G * Math.abs(b1.mass)) / (this.C * this.C);
-            b1.radius = rs * 2.6;
-            b1.isBlackHole = true;
-          }
-        }
-        for (let i = 0; i < this.bodies.length; i++) {
-          const b1 = this.bodies[i];
-          if (b1.mass === 0) continue;
-          for (let j = i + 1; j < this.bodies.length; j++) {
-            const b2 = this.bodies[j];
-            if (b2.mass === 0) continue;
-            const dx = b2.position.x - b1.position.x;
-            const dy = b2.position.y - b1.position.y;
-            const distSq = dx * dx + dy * dy;
-            const isB1BH = this.isBodyBlackHole(b1);
-            const isB2BH = this.isBodyBlackHole(b2);
-            let captureRadius = b1.radius + b2.radius;
-            if (isB1BH) captureRadius = b1.radius * 0.99;
-            if (isB2BH) captureRadius = isB1BH ? Math.min(captureRadius, b2.radius * 0.99) : b2.radius * 0.99;
-            if (distSq < captureRadius * captureRadius) {
-              const bigger = b1.mass >= b2.mass ? b1 : b2;
-              const smaller = b1.mass >= b2.mass ? b2 : b1;
-
-              // Check if vehicle is involved in collision
-              if (this.vehicle && (b1.id === this.vehicle.id || b2.id === this.vehicle.id)) {
-                const vehicleBody = b1.id === this.vehicle.id ? b1 : b2;
-                const other = b1.id === this.vehicle.id ? b2 : b1;
-
-                if ((vehicleBody as any).parentBodyId === other.id) continue;
-
-                // If it's a black hole or extreme star, destroy rocket
-                if (this.isBodyBlackHole(other) || other.mass > 1000000) {
-                  vehicleBody.mass = 0;
-                  this.vehicle = null;
-                  break;
-                } else {
-                  // Calculate relative speed for impact damage
-                  const relVx = vehicleBody.velocity.x - other.velocity.x;
-                  const relVy = vehicleBody.velocity.y - other.velocity.y;
-                  const relSpeedSq = relVx * relVx + relVy * relVy;
-
-                  if ((vehicleBody as any).isLaunchingOrThrusting) {
-                    // Launching: only depenetrate if sinking in, otherwise fly free
-                    const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
-                    const nx = Math.cos(angle), ny = Math.sin(angle);
-                    const relVx = vehicleBody.velocity.x - other.velocity.x;
-                    const relVy = vehicleBody.velocity.y - other.velocity.y;
-                    const inward = relVx * nx + relVy * ny;
-                    if (inward < 0) {
-                      // Still sinking: push out and cancel inward velocity
-                      const surfaceDist = other.radius + vehicleBody.radius;
-                      vehicleBody.position.x = other.position.x + nx * surfaceDist;
-                      vehicleBody.position.y = other.position.y + ny * surfaceDist;
-                      vehicleBody.velocity.x -= inward * nx;
-                      vehicleBody.velocity.y -= inward * ny;
-                    }
-                    continue; // Never merge/crash while thrusting
-                  } else if (relSpeedSq < 1e-6 && !(vehicleBody as any).isLaunchingOrThrusting) {
-                    // Gentle landing: bind to surface
-                    const v = vehicleBody as any;
-                    v.parentBodyId = other.id;
-                    v.velocity.x = other.velocity.x;
-                    v.velocity.y = other.velocity.y;
-                    const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
-                    v.rotation = angle; // Align to surface
-                    v.position.x = other.position.x + Math.cos(angle) * (other.radius + vehicleBody.radius);
-                    v.position.y = other.position.y + Math.sin(angle) * (other.radius + vehicleBody.radius);
-                    v.relativeOffset = {
-                      x: v.position.x - other.position.x,
-                      y: v.position.y - other.position.y
-                    };
-                    continue; // Don't merge
-                  } else {
-                    // High impact crash
-                    vehicleBody.mass = 0;
-                    this.vehicle = null;
-                    break;
-                  }
+              if ((vehicleBody as any).isLaunchingOrThrusting) {
+                // Launching: only depenetrate if sinking in, otherwise fly free
+                const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
+                const nx = Math.cos(angle), ny = Math.sin(angle);
+                const relVx = vehicleBody.velocity.x - other.velocity.x;
+                const relVy = vehicleBody.velocity.y - other.velocity.y;
+                const inward = relVx * nx + relVy * ny;
+                if (inward < 0) {
+                  // Still sinking: push out and cancel inward velocity
+                  const surfaceDist = other.radius + vehicleBody.radius;
+                  vehicleBody.position.x = other.position.x + nx * surfaceDist;
+                  vehicleBody.position.y = other.position.y + ny * surfaceDist;
+                  vehicleBody.velocity.x -= inward * nx;
+                  vehicleBody.velocity.y -= inward * ny;
                 }
+                continue; // Never merge/crash while thrusting
+              } else if (relSpeedSq < 1e-6 && !(vehicleBody as any).isLaunchingOrThrusting) {
+                // Gentle landing: bind to surface
+                const v = vehicleBody as any;
+                v.parentBodyId = other.id;
+                v.velocity.x = other.velocity.x;
+                v.velocity.y = other.velocity.y;
+                const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
+                v.rotation = angle; // Align to surface
+                v.position.x = other.position.x + Math.cos(angle) * (other.radius + vehicleBody.radius);
+                v.position.y = other.position.y + Math.sin(angle) * (other.radius + vehicleBody.radius);
+                v.relativeOffset = {
+                  x: v.position.x - other.position.x,
+                  y: v.position.y - other.position.y
+                };
+                continue; // Don't merge
+              } else {
+                // High impact crash
+                vehicleBody.mass = 0;
+                this.vehicle = null;
+                break;
               }
-
-              const totalMass = bigger.mass + smaller.mass;
-              bigger.velocity.x = (bigger.mass * bigger.velocity.x + smaller.mass * smaller.velocity.x) / totalMass;
-              bigger.velocity.y = (bigger.mass * bigger.velocity.y + smaller.mass * smaller.velocity.y) / totalMass;
-              bigger.position.x = (bigger.mass * bigger.position.x + smaller.mass * smaller.position.x) / totalMass;
-              bigger.position.y = (bigger.mass * bigger.position.y + smaller.mass * smaller.position.y) / totalMass;
-              const newRadius = Math.sqrt(bigger.radius * bigger.radius + smaller.radius * smaller.radius);
-              bigger.mass = totalMass;
-              if (!this.isBodyBlackHole(bigger)) bigger.radius = newRadius;
-              else {
-                const rs = (2 * this.G * bigger.mass) / (this.C * this.C);
-                bigger.radius = rs * 2.6;
-              }
-              smaller.mass = 0;
-              if (this.camera.followingId === smaller.id) this.camera.followingId = bigger.id;
-              if (b1.mass === 0) break;
             }
           }
+
+          const totalMass = bigger.mass + smaller.mass;
+          bigger.velocity.x = (bigger.mass * bigger.velocity.x + smaller.mass * smaller.velocity.x) / totalMass;
+          bigger.velocity.y = (bigger.mass * bigger.velocity.y + smaller.mass * smaller.velocity.y) / totalMass;
+          bigger.position.x = (bigger.mass * bigger.position.x + smaller.mass * smaller.position.x) / totalMass;
+          bigger.position.y = (bigger.mass * bigger.position.y + smaller.mass * smaller.position.y) / totalMass;
+          const newRadius = Math.sqrt(bigger.radius * bigger.radius + smaller.radius * smaller.radius);
+          bigger.mass = totalMass;
+          if (!this.isBodyBlackHole(bigger)) bigger.radius = newRadius;
+          else {
+            const rs = (2 * this.G * bigger.mass) / (this.C * this.C);
+            bigger.radius = rs * 2.6;
+          }
+          smaller.mass = 0;
+          if (this.camera.followingId === smaller.id) this.camera.followingId = bigger.id;
+          if (b1.mass === 0) break;
         }
-        this.bodies = this.bodies.filter(b => b.mass > 0);
+      }
+    }
+    this.bodies = this.bodies.filter(b => b.mass > 0);
   }
 
   computeProjections() {
@@ -1313,7 +1357,7 @@ function autopilotStep(t, fc) {
         const easeOut = 1 - Math.pow(1 - t, 3);
         this.cinematicCamera.zoomScale = this.cinematicCamera.zoomStart + (this.cinematicCamera.targetZoomScale - this.cinematicCamera.zoomStart) * easeOut;
       }
-      
+
       if (this.cinematicCamera.offsetDuration > 0 && this.cinematicCamera.offsetTime < this.cinematicCamera.offsetDuration) {
         this.cinematicCamera.offsetTime += dt;
         const t = Math.min(1, this.cinematicCamera.offsetTime / this.cinematicCamera.offsetDuration);

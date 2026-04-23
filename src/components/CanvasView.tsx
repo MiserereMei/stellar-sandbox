@@ -241,6 +241,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     sim.previewVelocityVector = null;
     sim.orbitPreview = null;
     sim.rulerStartPoint = null;
+    sim.rulerEndPoint = null;
   }, [toolMode, sim]);
 
   useEffect(() => {
@@ -266,7 +267,27 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       sim.mouseWorldPos = wx;
 
       if (toolMode === "ruler") {
-        sim.rulerStartPoint = wx;
+        if (!sim.rulerStartPoint) {
+          sim.rulerStartPoint = wx;
+        } else {
+          // Check if clicking same spot to cancel/exit
+          const dx = (wx.x - sim.rulerStartPoint.x) * sim.camera.zoom;
+          const dy = (wx.y - sim.rulerStartPoint.y) * sim.camera.zoom;
+          if (Math.sqrt(dx * dx + dy * dy) < 10) {
+            setToolMode("select");
+            sim.rulerStartPoint = null;
+            sim.rulerEndPoint = null;
+            return;
+          }
+
+          if (!sim.rulerEndPoint) {
+            sim.rulerEndPoint = wx;
+          } else {
+            // 3rd click: clear previous and start a NEW one at the current spot
+            sim.rulerEndPoint = null;
+            sim.rulerStartPoint = wx;
+          }
+        }
         return;
       }
 
@@ -560,6 +581,14 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             worldPinch.y - (worldPinch.y - sim.camera.y) * (oldZoom / newZoom);
 
           iState.lastPinchDist = dist;
+
+          // Update mouseWorldPos after camera/zoom shift
+          sim.mouseWorldPos = sim.screenToWorld(
+            midX - rect.left,
+            midY - rect.top,
+            container.clientWidth,
+            container.clientHeight,
+          );
         }
         return;
       }
@@ -684,10 +713,38 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
     const onWheel = (e: WheelEvent) => {
       if (streamingRef.current) return;
+      const rect = container.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      // 1. Capture world point under mouse before zoom
+      const worldMouseBefore = sim.screenToWorld(
+        sx,
+        sy,
+        container.clientWidth,
+        container.clientHeight,
+      );
+
       const zoomSpeed = 0.001;
-      let newZoom = sim.camera.zoom * Math.exp(-e.deltaY * zoomSpeed);
-      newZoom = Math.max(1e-15, Math.min(newZoom, 1e15)); // Relaxed zoom clamp
+      const oldZoom = sim.camera.zoom;
+      let newZoom = oldZoom * Math.exp(-e.deltaY * zoomSpeed);
+      newZoom = Math.max(1e-15, Math.min(newZoom, 1e15));
+      
       sim.camera.zoom = newZoom;
+
+      // 2. If not following, anchor zoom to mouse position
+      if (!sim.camera.followingId) {
+        sim.camera.x = worldMouseBefore.x - (sx - container.clientWidth / 2) / newZoom;
+        sim.camera.y = worldMouseBefore.y - (sy - container.clientHeight / 2) / newZoom;
+      }
+
+      // 3. Update mouseWorldPos immediately so tools (ruler) stay in sync
+      sim.mouseWorldPos = sim.screenToWorld(
+        sx,
+        sy,
+        container.clientWidth,
+        container.clientHeight,
+      );
     };
 
     const onDblClick = (e: MouseEvent) => {
@@ -1438,13 +1495,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           }
         }
 
-        for (const [id, txt] of textCache) {
-          if (!activeLabels.has(id)) {
-            labelsContainer.removeChild(txt);
-            txt.destroy();
-            textCache.delete(id);
-          }
-        }
+
 
         const syncTransform = (target: PIXI.Container) => {
           target.position.copyFrom(worldBgContainer.position);
@@ -1458,27 +1509,22 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
         if (sim.rulerStartPoint) {
           const start = sim.rulerStartPoint;
-          const end = sim.mouseWorldPos;
+          const isFinished = !!sim.rulerEndPoint;
+          const end = isFinished ? sim.rulerEndPoint! : sim.mouseWorldPos;
           const dx = end.x - start.x;
           const dy = end.y - start.y;
           const distWorld = Math.sqrt(dx * dx + dy * dy);
           const distKm = distWorld * 6371;
 
+          // Draw the line and distance (either fixed or dynamic to mouse)
           uiGraphics
-            .moveTo(start.x - cx, start.y - cy)
-            .lineTo(end.x - cx, end.y - cy);
+            .moveTo((start.x - cx) * zoom, (start.y - cy) * zoom)
+            .lineTo((end.x - cx) * zoom, (end.y - cy) * zoom);
           uiGraphics.stroke({
-            width: 1.5 / zoom,
+            width: 2,
             color: "#facc15",
             alpha: 0.8,
           });
-
-          uiGraphics
-            .circle(start.x - cx, start.y - cy, 4 / zoom)
-            .fill({ color: "#facc15" });
-          uiGraphics
-            .circle(end.x - cx, end.y - cy, 4 / zoom)
-            .fill({ color: "#facc15" });
 
           // Ruler text
           let distLabel = `${distKm.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
@@ -1504,11 +1550,20 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           }
           rtxt.text = distLabel;
           rtxt.position.set(
-            (start.x - cx + (end.x - cx)) / 2 * zoom,
-            (start.y - cy + (end.y - cy)) / 2 * zoom + 10,
+            ((start.x - cx + (end.x - cx)) / 2) * zoom,
+            ((start.y - cy + (end.y - cy)) / 2) * zoom + 12,
           );
           rtxt.scale.set(1);
           activeLabels.add(rulerTextId);
+
+          // Draw endpoints
+          uiGraphics
+            .circle((start.x - cx) * zoom, (start.y - cy) * zoom, 4)
+            .fill({ color: "#facc15" });
+          
+          uiGraphics
+            .circle((end.x - cx) * zoom, (end.y - cy) * zoom, 4)
+            .fill({ color: "#facc15" });
         }
 
         if (sim.previewVelocityVector) {
@@ -1586,6 +1641,14 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               5,
             );
             uiGraphics.fill({ color: "#64c8ff", alpha: 0.8 });
+          }
+        }
+
+        for (const [id, txt] of textCache) {
+          if (!activeLabels.has(id)) {
+            labelsContainer.removeChild(txt);
+            txt.destroy();
+            textCache.delete(id);
           }
         }
       });

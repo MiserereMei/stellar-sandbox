@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Simulation } from '../lib/Simulation';
 import { motion } from 'motion/react';
-import { X } from 'lucide-react';
+import { X, Trash2, Download } from 'lucide-react';
 
 interface AutopilotConsoleProps {
   sim: Simulation;
   logs: {time: number, msg: string}[];
   onAddLog?: (msg: string) => void;
+  onClearLogs?: () => void;
   onClose: () => void;
 }
 
-export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, onAddLog, onClose }) => {
+export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, onAddLog, onClearLogs, onClose }) => {
   const [script, setScript] = useState(sim.currentScript);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, o
 
   useEffect(() => {
     if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      logEndRef.current.scrollIntoView({ behavior: 'auto' });
     }
   }, [logs]);
 
@@ -68,6 +69,20 @@ export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, o
       ? sim.missionTime - launchEpoch
       : sim.missionTime;
   const formattedTime = displayTime < 0 ? Math.ceil(Math.abs(displayTime)) : Math.floor(Math.abs(displayTime));
+
+  const downloadLogs = () => {
+    if (logs.length === 0) return;
+    const text = logs.map(l => `[${l.time.toFixed(2)}s] ${l.msg}`).join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `telemetry_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <motion.aside 
@@ -139,7 +154,25 @@ export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, o
 
             {/* Telemetry Log Section */}
             <div className="flex flex-col h-48 gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Telemetry Log</span>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Telemetry Log</span>
+                    <div className="flex items-center gap-3 mr-2">
+                        <button 
+                            onClick={onClearLogs}
+                            title="Clear Logs"
+                            className="text-gray-500 hover:text-red-400 transition-colors p-1"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                        <button 
+                            onClick={downloadLogs}
+                            title="Download Logs"
+                            className="text-gray-500 hover:text-blue-400 transition-colors p-1"
+                        >
+                            <Download size={12} />
+                        </button>
+                    </div>
+                </div>
                 <div className="flex-1 bg-black/60 border border-white/5 rounded-xl p-3 font-mono text-[10px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
                     {logs.length === 0 && <div className="text-slate-700 italic">No telemetry data...</div>}
                     {logs.map((log, i) => (

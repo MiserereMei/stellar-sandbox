@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Simulation } from './lib/Simulation';
 import { CanvasView } from './components/CanvasView';
 import { Toolbar } from './components/Toolbar';
@@ -41,15 +41,51 @@ export default function App() {
   const [lastAction, setLastAction] = useState<(() => void) | null>(null);
 
   const addAutopilotLog = useCallback((msg: string) => {
-    setAutopilotLogs(prev => [...prev.slice(-99), { time: sim.missionTime, msg }]);
-    // Use console.debug (Verbose) level so it doesn't clutter the main console
-    // You can see these by enabling 'Verbose' in your DevTools console filter
-    console.debug(
-      `%c${sim.missionTime.toFixed(1)}s: %c${msg}`,
-      "color: #6366f1; font-weight: bold;",
-      "color: #10b981;"
-    );
+    (window as any)._logBuffer = (window as any)._logBuffer || [];
+    (window as any)._logBuffer.push({ time: sim.missionTime, msg });
+    console.debug(`%c${sim.missionTime.toFixed(1)}s: %c${msg}`, "color: #6366f1; font-weight: bold;", "color: #10b981;");
   }, [sim]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const buffer = (window as any)._logBuffer;
+      if (buffer && buffer.length > 0) {
+        const newLogs = [...buffer];
+        (window as any)._logBuffer = [];
+        
+        // --- INFINITE BLACK BOX ---
+        (window as any)._fullLogBuffer = (window as any)._fullLogBuffer || [];
+        (window as any)._fullLogBuffer.push(...newLogs);
+
+        setAutopilotLogs(prev => {
+          const combined = [...prev, ...newLogs];
+          // UI Limit: 10,000 logs
+          return combined.length > 10000 ? combined.slice(-10000) : combined;
+        });
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
+  const clearAutopilotLogs = useCallback(() => {
+    (window as any)._logBuffer = [];
+    (window as any)._fullLogBuffer = [];
+    setAutopilotLogs([]);
+  }, []);
+
+  // Function to download the infinite log
+  const downloadFullLog = useCallback(() => {
+    const fullLogs = (window as any)._fullLogBuffer || [];
+    if (fullLogs.length === 0) return;
+    const content = fullLogs.map((l: any) => `[${l.time.toFixed(2)}s] ${l.msg}`).join('\n');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `telemetry_${new Date().toISOString()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
 
   // Auto-load from URL
   useEffect(() => {
@@ -217,6 +253,7 @@ export default function App() {
                   sim={sim}
                   logs={autopilotLogs}
                   onAddLog={addAutopilotLog}
+                  onClearLogs={clearAutopilotLogs}
                   onClose={() => setShowAutopilot(false)}
                 />
               ) : null}
