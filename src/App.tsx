@@ -352,6 +352,7 @@ export default function App() {
           onClose={() => setShowOutliner(false)}
           onSelectBody={onSelectBody}
           selectedBodyId={selectedBodyId}
+          isMobile={isMobile}
         />
 
         <TimeJumpOverlay sim={sim} />
@@ -386,7 +387,7 @@ export default function App() {
               isMobile={isMobile}
             />
 
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               {selectedBodyId ? (
                 <Sidebar
                   key="sidebar"

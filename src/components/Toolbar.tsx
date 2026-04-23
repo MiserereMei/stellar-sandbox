@@ -55,6 +55,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [jumpTargetDate, setJumpTargetDate] = useState(sim.getCurrentDate().toISOString().split('T')[0]);
   const [jumpPrecision, setJumpPrecision] = useState<'fast' | 'high' | 'ultra'>('high');
   const [wasmTick, setWasmTick] = useState(0);
+  const [addMenuExpanded, setAddMenuExpanded] = useState(false);
 
   const handleDateClick = (e: React.MouseEvent) => {
     if (isJumping) return;
@@ -242,7 +243,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       <button
         onPointerDown={onClick}
         onContextMenu={onContextMenu}
-        className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border transition-all duration-100 outline-none aspect-square touch-none select-none ${colors[color]}`}
+        className={`${isMobile ? 'w-12 h-12' : 'w-10 h-10'} shrink-0 flex items-center justify-center rounded-xl border transition-all duration-100 outline-none aspect-square touch-pan-x select-none ${colors[color]}`}
         title={title}
       >
         {children}
@@ -252,119 +253,135 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <>
-      <div className={`fixed bottom-0 left-0 right-0 ${isMobile ? 'h-20' : 'h-16'} bg-[#020508]/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-between px-3 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.6)] selection:bg-blue-500/30`}>
-
-        {/* LEFT: SIMULATION CONTROLS */}
-        <div className="flex items-center gap-6">
-          {/* ACTION TOOLS */}
-          <div className="flex items-center gap-1.5">
-            <DockButton
-              active={toolMode === 'select'}
-              onClick={() => { setToolMode('select'); setActivePopUp(null); }}
-              title="Analyze & Pan"
-            >
-              <MousePointer2 size={18} />
-            </DockButton>
-
-            <DockButton
-              active={showOutliner}
-              onClick={() => { setShowOutliner(!showOutliner); setActivePopUp(null); }}
-              title="Simulation Outliner (Bodies List)"
-            >
-              <Layers size={18} />
-            </DockButton>
-
-
-
-            <DockButton
-              active={activePopUp === 'add'}
-              onClick={(e) => togglePopUp('add', e)}
-              title="Deploy Objects"
-            >
-              <Plus size={20} />
-            </DockButton>
-
-            <DockButton
-              color="red"
-              onClick={() => { sim.clear(); sim.camera.followingId = null; setLastAction(null); }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                if (lastAction) {
-                  sim.clear();
-                  lastAction();
-                }
-              }}
-              title="Clear Simulation (Right-click to reset last system)"
-            >
-              <Undo2 size={18} />
-            </DockButton>
-          </div>
-
-          {!isMobile && <div className="w-px h-8 bg-white/10" />}
-
-          {/* TIME CONTROLS */}
-          <div className="flex items-center gap-3">
-            <DockButton active={!paused} onClick={togglePause} title={paused ? 'Resume Simulation' : 'Pause Simulation'}>
-              <div className="pointer-events-none">
-                {paused ? <Play size={18} className="fill-current text-green-500" /> : <Pause size={18} className="fill-current text-blue-500" />}
-              </div>
-            </DockButton>
-
-            <div className="flex items-center gap-2 bg-white/5 rounded-xl px-2 py-1 border border-white/5 h-11 select-none shadow-inner">
-              <button
-                onClick={() => updateTimeScale(timeScale / 2)}
-                className="w-8 h-8 flex items-center justify-center text-[10px] font-bold bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all"
+      <div 
+        className={`fixed bottom-0 left-0 right-0 bg-[#020508]/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-between z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.6)] selection:bg-blue-500/30 ${isMobile ? 'h-auto pt-4 px-0' : 'h-16 px-3'}`}
+        style={isMobile ? { paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' } : undefined}
+      >
+        <div className={`w-full h-full flex items-center ${isMobile ? 'overflow-x-auto no-scrollbar px-4 gap-4' : 'justify-between'}`}>
+          {/* LEFT: SIMULATION CONTROLS */}
+          <div className="flex items-center gap-4 shrink-0">
+            {/* ACTION TOOLS */}
+            <div className="flex items-center gap-1.5">
+              <DockButton
+                active={toolMode === 'select'}
+                onClick={() => { setToolMode('select'); setActivePopUp(null); }}
+                title="Analyze & Pan"
               >
-                ÷2
-              </button>
+                <MousePointer2 size={18} />
+              </DockButton>
 
-              <div className="flex items-center px-1">
-                <input
-                  type="number"
-                  value={inputValue}
-                  onChange={handleInputChange}
-                  className="w-16 text-[12px] bg-transparent outline-none text-right font-mono text-blue-400 font-bold"
-                />
-                <select
-                  value={timeUnit}
-                  onChange={handleUnitChange}
-                  className="text-[10px] bg-transparent text-gray-500 font-bold uppercase outline-none ml-1 cursor-pointer hover:text-gray-300 transition-colors"
-                >
-                  {timeUnits.map(u => <option key={u.value} value={u.value} className="bg-[#0c1016]">{u.label.split(' ')[0]}</option>)}
-                </select>
-              </div>
-
-              <button
-                onClick={() => updateTimeScale(timeScale * 2)}
-                className="w-8 h-8 flex items-center justify-center text-[10px] font-bold bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all"
+              <DockButton
+                active={showOutliner}
+                onClick={() => { setShowOutliner(!showOutliner); setActivePopUp(null); }}
+                title="Simulation Outliner (Bodies List)"
               >
-                ×2
-              </button>
+                <Layers size={18} />
+              </DockButton>
+
+              <DockButton
+                active={activePopUp === 'add'}
+                onClick={(e) => togglePopUp('add', e)}
+                title="Deploy Objects"
+              >
+                <Plus size={20} />
+              </DockButton>
+
+              <DockButton
+                color="red"
+                onClick={() => { sim.clear(); sim.camera.followingId = null; setLastAction(null); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (lastAction) {
+                    sim.clear();
+                    lastAction();
+                  }
+                }}
+                title="Clear Simulation (Right-click to reset last system)"
+              >
+                <Undo2 size={18} />
+              </DockButton>
             </div>
 
-            {!isMobile && (
-              <div
-                onClick={handleDateClick}
-                className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''} ${activePopUp === 'jump' ? 'border-blue-500/50 bg-blue-500/10' : ''}`}
-              >
-                {isJumping && (
-                  <div className="absolute left-0 bottom-0 h-full bg-blue-500/20 transition-all duration-75" style={{ width: `${jumpProgress * 100}%` }} />
-                )}
-                <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-0.5 group-hover:text-blue-400 transition-colors z-10 relative">
-                  {isJumping ? 'Calculating...' : 'Date'}
-                </span>
-                <span ref={dateRef} className="text-[12px] font-mono font-bold text-white tracking-tight z-10 relative">
-                  {sim.getCurrentDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+            {!isMobile && <div className="w-px h-8 bg-white/10" />}
 
-        {/* RIGHT: NAVIGATION & SYSTEM */}
-          <div className="flex items-center gap-6">
+            {/* TIME CONTROLS */}
+            <div className="flex items-center gap-3">
+              <DockButton active={!paused} onClick={togglePause} title={paused ? 'Resume Simulation' : 'Pause Simulation'}>
+                <div className="pointer-events-none">
+                  {paused ? <Play size={18} className="fill-current text-green-500" /> : <Pause size={18} className="fill-current text-blue-500" />}
+                </div>
+              </DockButton>
+
+              {isMobile ? (
+                <div className="flex items-center gap-1 bg-white/5 rounded-2xl p-1 border border-white/5 shrink-0">
+                  <DockButton onClick={() => updateTimeScale(timeScale / 2)}>
+                    <span className="text-[10px] font-bold">÷2</span>
+                  </DockButton>
+                  <div className="px-3 flex flex-col items-center justify-center min-w-[64px]">
+                    <span className="text-[12px] font-mono font-bold text-blue-400 leading-none">{inputValue}</span>
+                    <span className="text-[8px] text-gray-500 uppercase font-bold mt-0.5">{timeUnits.find(u => u.value === timeUnit)?.label.split(' ')[0]}</span>
+                  </div>
+                  <DockButton onClick={() => updateTimeScale(timeScale * 2)}>
+                    <span className="text-[10px] font-bold">×2</span>
+                  </DockButton>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 bg-white/5 rounded-xl px-2 py-1 border border-white/5 h-11 select-none shadow-inner">
+                  <button
+                    onClick={() => updateTimeScale(timeScale / 2)}
+                    className="w-8 h-8 flex items-center justify-center text-[10px] font-bold bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all"
+                  >
+                    ÷2
+                  </button>
+
+                  <div className="flex items-center px-1">
+                    <input
+                      type="number"
+                      value={inputValue}
+                      onChange={handleInputChange}
+                      className="w-16 text-[12px] bg-transparent outline-none text-right font-mono text-blue-400 font-bold"
+                    />
+                    <select
+                      value={timeUnit}
+                      onChange={handleUnitChange}
+                      className="text-[10px] bg-transparent text-gray-500 font-bold uppercase outline-none ml-1 cursor-pointer hover:text-gray-300 transition-colors"
+                    >
+                      {timeUnits.map(u => <option key={u.value} value={u.value} className="bg-[#0c1016]">{u.label.split(' ')[0]}</option>)}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => updateTimeScale(timeScale * 2)}
+                    className="w-8 h-8 flex items-center justify-center text-[10px] font-bold bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all"
+                  >
+                    ×2
+                  </button>
+                </div>
+              )}
+
+              {!isMobile && (
+                <div
+                  onClick={handleDateClick}
+                  className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''} ${activePopUp === 'jump' ? 'border-blue-500/50 bg-blue-500/10' : ''}`}
+                >
+                  {isJumping && (
+                    <div className="absolute left-0 bottom-0 h-full bg-blue-500/20 transition-all duration-75" style={{ width: `${jumpProgress * 100}%` }} />
+                  )}
+                  <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-0.5 group-hover:text-blue-400 transition-colors z-10 relative">
+                    {isJumping ? 'Calculating...' : 'Date'}
+                  </span>
+                  <span ref={dateRef} className="text-[12px] font-mono font-bold text-white tracking-tight z-10 relative">
+                    {sim.getCurrentDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT: NAVIGATION & SYSTEM */}
+          <div className={`flex items-center shrink-0 ${isMobile ? 'gap-2' : 'gap-6'}`}>
             {/* SCALE & ZOOM POD */}
-            <div className="flex items-center gap-6">
+            <div className={`flex items-center shrink-0 ${isMobile ? 'gap-2' : 'gap-6'}`}>
               {!isMobile && (
                 <div className="flex flex-col items-center justify-center gap-1.5 w-36 shrink-0">
                   <div className="h-1 border-x border-b border-white/30 w-full relative">
@@ -376,17 +393,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
               )}
 
-              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
-                <button
+              <div className="flex items-center">
+                <DockButton
+                  active={toolMode === 'ruler'}
                   onClick={() => { setToolMode('ruler'); setActivePopUp(null); }}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all group ${toolMode === 'ruler'
-                    ? 'bg-blue-600 text-white'
-                    : 'hover:bg-white/10 text-gray-400 hover:text-white'
-                    }`}
                   title="Distance Ruler"
                 >
-                  <Ruler size={14} className={toolMode === 'ruler' ? '' : 'group-hover:scale-110'} />
-                </button>
+                  <Ruler size={18} />
+                </DockButton>
               </div>
 
               {!isMobile && (
@@ -406,15 +420,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
             {!isMobile && <div className="w-px h-8 bg-white/10" />}
 
-          {/* SYSTEM ACTIONS */}
-          <div className="flex items-center gap-1.5">
-            <DockButton color="purple" active={activePopUp === 'ai'} onClick={(e) => togglePopUp('ai', e)} title="Astro Copilot">
-              <Sparkles size={18} fill={activePopUp === 'ai' ? "currentColor" : "none"} />
-            </DockButton>
+            {/* SYSTEM ACTIONS */}
+            <div className="flex items-center gap-1.5">
+              <DockButton color="purple" active={activePopUp === 'ai'} onClick={(e) => togglePopUp('ai', e)} title="Astro Copilot">
+                <Sparkles size={18} fill={activePopUp === 'ai' ? "currentColor" : "none"} />
+              </DockButton>
 
-            <DockButton active={activePopUp === 'settings'} onClick={(e) => togglePopUp('settings', e)} title="Visual Simulation Settings">
-              <Settings size={18} />
-            </DockButton>
+              <DockButton active={activePopUp === 'settings'} onClick={(e) => togglePopUp('settings', e)} title="Visual Simulation Settings">
+                <Settings size={18} />
+              </DockButton>
+            </div>
           </div>
         </div>
       </div>
@@ -423,27 +438,55 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       <AnimatePresence>
         {activePopUp === 'add' && (
           <motion.div
-            style={anchors.add ? {
+            style={!isMobile && anchors.add ? {
               left: anchors.add.left,
               bottom: '80px'
             } : undefined}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="fixed bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl flex flex-col z-[100] w-[500px] overflow-hidden will-change-transform"
+            initial={isMobile ? { y: '100%', height: '70vh' } : { opacity: 0, y: 10 }}
+            animate={isMobile 
+              ? { y: 0, height: addMenuExpanded ? '100vh' : '70vh' } 
+              : { opacity: 1, y: 0 }
+            }
+            exit={isMobile ? { y: '100%', height: '70vh' } : { opacity: 0, y: 10 }}
+            transition={{ type: 'spring', damping: 40, stiffness: 200 }}
+            drag={isMobile ? "y" : false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={isMobile ? { top: addMenuExpanded ? 0 : 0.2, bottom: 1 } : 0.5}
+            dragMomentum={false}
+            onDragEnd={(_, info) => {
+              if (isMobile) {
+                if (info.offset.y > 100) setActivePopUp(null);
+                else if (info.offset.y < -100) setAddMenuExpanded(true);
+                else if (info.offset.y > -50 && addMenuExpanded) setAddMenuExpanded(false);
+              }
+            }}
+            className={`fixed bg-[#0c1016]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col z-[100] overflow-hidden will-change-transform ${
+              isMobile 
+                ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t' 
+                : 'w-[500px] rounded-2xl border'
+            }`}
           >
-            {/* Unified Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
-                <Plus size={13} className="text-blue-400" />
-                <span>CONSTRUCTION CORE</span>
+            {/* Mobile Handle */}
+            {isMobile && (
+              <div className="w-full flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+                <div className="w-12 h-1.5 bg-white/20 rounded-full" />
               </div>
-              <button
-                onClick={() => setActivePopUp(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
+            )}
+
+            {/* Unified Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
+                <Plus size={16} className="text-blue-400" />
+                <span>Construction Core</span>
+              </div>
+              {!isMobile && (
+                <button
+                  onClick={() => setActivePopUp(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
 
             <div className="p-4 flex flex-col gap-4">

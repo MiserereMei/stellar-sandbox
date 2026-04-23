@@ -22,6 +22,7 @@ interface OutlinerProps {
   onClose: () => void;
   onSelectBody: (id: string | null) => void;
   selectedBodyId: string | null;
+  isMobile: boolean;
 }
 
 export const Outliner: React.FC<OutlinerProps> = ({ 
@@ -29,9 +30,11 @@ export const Outliner: React.FC<OutlinerProps> = ({
   isVisible, 
   onClose, 
   onSelectBody,
-  selectedBodyId 
+  selectedBodyId,
+  isMobile
 }) => {
   const [search, setSearch] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     'star': true,
     'planet': true,
@@ -77,6 +80,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
   const handleFocus = (body: any) => {
     sim.camera.followingId = body.id;
     onSelectBody(body.id);
+    if (isMobile) onClose(); // Close on mobile to see the focus
   };
 
   const renderBodyItem = (b: any) => {
@@ -87,7 +91,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
     return (
       <div 
         key={b.id}
-        className={`group flex items-center justify-between px-3 py-2 rounded-lg transition-all cursor-pointer border ${
+        className={`group flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer border ${
           isSelected 
             ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' 
             : 'hover:bg-white/5 border-transparent text-gray-400 hover:text-white'
@@ -96,13 +100,13 @@ export const Outliner: React.FC<OutlinerProps> = ({
       >
         <div className="flex items-center gap-3 overflow-hidden">
           <div 
-            className="w-2 h-2 rounded-full shrink-0 shadow-[0_0_8px_rgba(255,255,255,0.3)]" 
+            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-[0_0_8px_rgba(255,255,255,0.3)]" 
             style={{ backgroundColor: b.type === 'blackhole' ? '#000' : (b as any).color || '#fff' }}
           />
-          <span className="text-[11px] font-medium truncate tracking-tight">{b.name}</span>
+          <span className="text-[12px] font-medium truncate tracking-tight">{b.name}</span>
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className={`flex items-center gap-1 ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
           {isRocket && (
             <button
               onClick={(e) => {
@@ -115,11 +119,11 @@ export const Outliner: React.FC<OutlinerProps> = ({
                   window.open(`/?editor=${b.id}`, `Editor_${b.id}`, 'width=800,height=600');
                 }
               }}
-              className={`p-1.5 rounded-md transition-colors ${
-                isActive ? 'bg-red-500/20 text-red-400 hover:bg-red-500/40' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40'
+              className={`p-2 rounded-lg transition-colors ${
+                isActive ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'
               }`}
             >
-              {isActive ? <Square size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
+              {isActive ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
             </button>
           )}
           <button
@@ -128,9 +132,9 @@ export const Outliner: React.FC<OutlinerProps> = ({
               handleFocus(b);
             }}
             title="Focus Camera"
-            className="p-1.5 rounded-md bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white transition-colors"
+            className="p-2 rounded-lg bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
           >
-            <Crosshair size={12} />
+            <Crosshair size={14} />
           </button>
         </div>
       </div>
@@ -141,24 +145,52 @@ export const Outliner: React.FC<OutlinerProps> = ({
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          initial={{ x: -300, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -300, opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed left-4 top-4 bottom-20 w-72 bg-[#11141b]/25 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl flex flex-col z-[40] overflow-hidden"
+          initial={isMobile ? { y: '100%', height: '70vh' } : { x: -340 }}
+          animate={isMobile 
+            ? { y: 0, height: isExpanded ? '100vh' : '70vh' } 
+            : { x: 0 }
+          }
+          exit={isMobile ? { y: '100%', height: '70vh' } : { x: -340 }}
+          transition={{ type: 'spring', damping: 40, stiffness: 200 }}
+          drag={isMobile ? "y" : false}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={isMobile ? { top: isExpanded ? 0 : 0.2, bottom: 1 } : 0.5}
+          dragMomentum={false}
+          onDragEnd={(_, info) => {
+            if (isMobile) {
+              if (info.offset.y > 100) onClose();
+              else if (info.offset.y < -100) setIsExpanded(true);
+              else if (info.offset.y > -50 && isExpanded) setIsExpanded(false);
+            }
+          }}
+          className={`fixed bg-[#11141b]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col z-[100] overflow-hidden will-change-transform ${
+            isMobile 
+              ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t' 
+              : 'left-4 top-4 bottom-20 w-80 rounded-2xl border'
+          }`}
+          style={isMobile ? { paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' } : undefined}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-4 border-b border-white/5">
-            <div className="flex items-center gap-2">
-              <Layers size={16} className="text-blue-400" />
-              <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">Outliner</span>
+          {/* Mobile Handle */}
+          {isMobile && (
+            <div className="w-full flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+              <div className="w-12 h-1.5 bg-white/20 rounded-full" />
             </div>
-            <button 
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
+          )}
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <Layers size={18} className="text-blue-400" />
+              <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">Simulation Outliner</span>
+            </div>
+            {!isMobile && (
+              <button 
+                onClick={onClose}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
 
           {/* Search */}

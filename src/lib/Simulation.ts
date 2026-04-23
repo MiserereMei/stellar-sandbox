@@ -193,6 +193,7 @@ export class Simulation {
     this.missionTime = 0;
     this.secondsPerSimSecond = 1.0;
     this.cinematicCamera.active = false;
+    this.explosions = [];
   }
 
   addBody(x: number, y: number, vx: number = 0, vy: number = 0): Body {

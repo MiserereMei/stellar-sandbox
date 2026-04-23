@@ -11,11 +11,12 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose, isMobile }) => {
-  const [body, setBody] = useState<Body | null>(null);
+  const [body, setBody] = useState<Body | null>(() => sim.bodies.find(b => b.id === selectedBodyId) || null);
   const [massUnit, setMassUnit] = useState<string>('Solar Masses');
   const [radiusUnit, setRadiusUnit] = useState<string>('Solar Radii');
   const [speedUnit, setSpeedUnit] = useState<string>('km/s');
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const massUnits: Record<string, number> = {
     'Kilograms': 1.6744e-25,      
@@ -54,7 +55,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose, 
   // Sync state occasionally or on selection
   useEffect(() => {
     if (!selectedBodyId) {
-      setBody(null);
       return;
     }
     
@@ -90,26 +90,50 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose, 
   };
 
   return (
-    <AnimatePresence>
-      {body && (
         <motion.aside 
-          initial={isMobile ? { y: '100%', opacity: 0 } : { x: 340, opacity: 0 }}
-          animate={isMobile ? { y: 0, opacity: 1 } : { x: 0, opacity: 1 }}
-          exit={isMobile ? { y: '100%', opacity: 0 } : { x: 340, opacity: 0 }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          className={`fixed bg-[#11141b]/25 backdrop-blur-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl z-[60] will-change-transform ${
+          initial={isMobile ? { y: '100%', height: '70vh' } : { x: 340 }}
+          animate={isMobile 
+            ? { y: 0, height: isExpanded ? '100vh' : '70vh' } 
+            : { x: 0 }
+          }
+          exit={isMobile ? { y: '100vh', transition: { duration: 0.2, ease: "easeIn" } } : { x: 340 }}
+          transition={{ type: "spring", damping: 40, stiffness: 200 }}
+          drag={isMobile ? "y" : false}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={isMobile ? { top: isExpanded ? 0 : 0.2, bottom: 1 } : 0.5}
+          dragMomentum={false}
+          onDragEnd={(_, info) => {
+            if (isMobile) {
+              if (info.offset.y > 100) onClose();
+              else if (info.offset.y < -100) setIsExpanded(true);
+              else if (info.offset.y > -50 && isExpanded) setIsExpanded(false);
+            }
+          }}
+          className={`fixed bg-[#11141b]/95 backdrop-blur-3xl border-white/10 flex flex-col overflow-hidden shadow-2xl z-[120] will-change-transform ${
             isMobile 
-              ? 'bottom-0 left-0 right-0 w-full h-[60vh] rounded-t-3xl p-4 pb-16' 
-              : 'top-4 right-4 bottom-20 w-[320px] rounded-2xl p-6'
+              ? 'bottom-0 left-0 right-0 w-full rounded-t-3xl border-t px-6' 
+              : 'top-4 right-4 bottom-20 w-[320px] rounded-2xl border p-6'
           }`}
+          style={isMobile ? { paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' } : undefined}
         >
-          <button 
-            onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-          >
-            <X size={16} />
-          </button>
-          <section className="flex flex-col gap-8 h-full overflow-y-auto pr-1">
+          {!body ? null : (
+            <>
+              {/* Mobile Handle */}
+              {isMobile && (
+                <div className="w-full flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+                  <div className="w-12 h-1.5 bg-white/20 rounded-full" />
+                </div>
+              )}
+              
+              {!isMobile && (
+                <button 
+                  onClick={onClose}
+                  className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
+              <section className="flex flex-col gap-8 h-full overflow-y-auto pr-1">
         <section>
           <div className="text-[10px] uppercase tracking-[2px] text-gray-500 mb-4 flex flex-col gap-1">
             <span className="font-bold">SYSTEM DATA // {body.id.slice(0, 8)}</span>
@@ -390,12 +414,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose, 
               : 'bg-red-600/20 border-red-600/40 text-red-500 hover:bg-red-600/40 hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]'
           }`}
         >
-          {sim.isStar(body) ? 'Trigger Supernova' : 'Self-Destruct (Test Explosion)'}
         </button>
       </div>
-        </motion.aside>
-      )}
-    </AnimatePresence>
+    </>
+  )}
+</motion.aside>
   );
 };
 
