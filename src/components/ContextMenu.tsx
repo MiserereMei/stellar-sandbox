@@ -201,13 +201,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, isTriggered, onC
               opacity: 1,
             }}
             exit={{
-              x: startX,
-              y: startY,
-              width: startSize,
-              height: startSize,
-              opacity: 1,
-              scale: 1,
-              transition: { duration: 0.2, ease: "easeIn" }
+              x: isTriggered ? startX : undefined,
+              y: isTriggered ? startY : undefined,
+              width: isTriggered ? startSize : undefined,
+              height: isTriggered ? startSize : undefined,
+              opacity: isTriggered ? 1 : 0, // No fade out if triggered, instant hide if not
+              scale: isTriggered ? 1 : 0.5,
+              transition: { duration: isTriggered ? 0.2 : 0, ease: "easeIn" }
             }}
             transition={isTriggered ? {
               type: "spring",

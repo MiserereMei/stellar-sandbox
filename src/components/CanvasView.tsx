@@ -209,7 +209,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       objectScreenPos: { x: number, y: number }
     }
   } | null>(null);
-  
+
   const contextMenuRef = useRef(contextMenu);
   useEffect(() => { contextMenuRef.current = contextMenu; }, [contextMenu]);
 
@@ -237,7 +237,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
   // State for interaction logic
   const interactionState = useRef<{
     isDraggingVector: boolean;
-    dragStartWorldPos: Vector2 | null;
+    dragStartWorldPos: { x: number; y: number } | null;
+    dragCurrentWorldPos: { x: number; y: number } | null;
+    lastPointerType: string;
+    previewRotation: number;
     isPanning: boolean;
     panStartScreenPos: Vector2 | null;
     panStartCamera: Vector2 | null;
@@ -256,6 +259,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
   }>({
     isDraggingVector: false,
     dragStartWorldPos: null,
+    dragCurrentWorldPos: null,
+    lastPointerType: isMobile ? 'touch' : 'mouse',
+    previewRotation: 0,
     isPanning: false,
     panStartScreenPos: null,
     panStartCamera: null,
@@ -271,7 +277,6 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     longPressTimer: null,
     longPressInterval: null,
     pointerDownScreenPos: null,
-    previewRotation: -Math.PI / 2,
     lastMouseScreenPos: { x: 0, y: 0 },
     zoomVelocity: 1,
   });
@@ -327,6 +332,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     const onPointerDown = (e: PointerEvent) => {
       if (streamingRef.current) return;
       const iState = interactionState.current;
+      iState.lastPointerType = e.pointerType;
       iState.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       container.setPointerCapture(e.pointerId);
 
@@ -349,7 +355,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       if (e.pointerType === 'touch' || isMobile) {
         if (iState.longPressTimer) clearTimeout(iState.longPressTimer);
         if (iState.longPressInterval) clearInterval(iState.longPressInterval);
-        
+
         // Show sphere after 50ms to avoid flicker on instant taps
         iState.longPressInterval = setTimeout(() => {
           // Find what's under the finger
@@ -374,14 +380,14 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           let previewData = undefined;
           if (liftedBody && rect) {
             const screenPos = sim.worldToScreen(
-              liftedBody.position.x, 
-              liftedBody.position.y, 
-              containerRef.current!.clientWidth, 
+              liftedBody.position.x,
+              liftedBody.position.y,
+              containerRef.current!.clientWidth,
               containerRef.current!.clientHeight
             );
             previewData = {
-              type: sim.isBodyBlackHole(liftedBody) ? 'blackhole' : 
-                    (((liftedBody as any).type === 'rocket' || (liftedBody as any).type === 'heatProtectedRocket') ? 'rocket' : 'planet'),
+              type: sim.isBodyBlackHole(liftedBody) ? 'blackhole' :
+                (((liftedBody as any).type === 'rocket' || (liftedBody as any).type === 'heatProtectedRocket') ? 'rocket' : 'planet'),
               color: liftedBody.color,
               radius: liftedBody.radius,
               rotation: (liftedBody as any).rotation || 0, // Pass rotation
@@ -391,11 +397,11 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             };
           }
 
-          setContextMenu({ 
+          setContextMenu({
             id: Date.now(),
-            x: e.clientX, 
-            y: e.clientY, 
-            bodyId, 
+            x: e.clientX,
+            y: e.clientY,
+            bodyId,
             isTriggered: false,
             preview: previewData
           });
@@ -407,7 +413,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           setContextMenu(prev => prev ? { ...prev, isTriggered: true } : null);
           iState.isPanning = false; // STOP PANNING
           iState.longPressTimer = null;
-          iState.longPressInterval = null; 
+          iState.longPressInterval = null;
         }, 600);
       }
 
@@ -633,6 +639,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
     const onPointerMove = (e: PointerEvent) => {
       if (streamingRef.current) return;
+      const iState = interactionState.current;
+      iState.lastPointerType = e.pointerType;
       const rect = container.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -643,27 +651,37 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         container.clientWidth,
         container.clientHeight,
       );
-      const iState = interactionState.current;
 
       iState.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       // Cancel long press if finger moved too much
       if (iState.pointerDownScreenPos) {
-        const dist = Math.sqrt((sx - iState.pointerDownScreenPos.x)**2 + (sy - iState.pointerDownScreenPos.y)**2);
+        const dist = Math.sqrt((sx - iState.pointerDownScreenPos.x) ** 2 + (sy - iState.pointerDownScreenPos.y) ** 2);
         if (dist > 15) {
           if (iState.longPressTimer) {
             clearTimeout(iState.longPressTimer);
             iState.longPressTimer = null;
           }
           if (iState.longPressInterval) {
-            clearTimeout(iState.longPressInterval);
+            clearInterval(iState.longPressInterval);
             iState.longPressInterval = null;
           }
-          // Only close if it hasn't triggered yet
-          setContextMenu(prev => (prev && !prev.isTriggered) ? null : prev);
+          // Force panning mode if we moved enough
+          if (!iState.isPanning) {
+            iState.isPanning = true;
+            iState.panStartScreenPos = { x: sx, y: sy };
+            iState.lastPanScreenPos = { x: sx, y: sy };
+            iState.panStartCamera = { x: sim.camera.x, y: sim.camera.y };
+          }
+          // If we haven't triggered the menu yet, cancel everything immediately
+          if (contextMenu && !contextMenu.isTriggered) {
+            setContextMenu(null);
+            hidingBodyIdRef.current = null;
+            lastClosedBodyIdRef.current = null;
+          }
         } else if (contextMenu && !contextMenu.isTriggered) {
-            // Update sphere position slightly to follow finger
-            setContextMenu(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+          // Update sphere position slightly to follow finger
+          setContextMenu(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
         }
       }
 
@@ -780,6 +798,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
       if (
         iState.isPanning &&
+        (!contextMenu || !contextMenu.isTriggered) &&
         iState.panStartScreenPos &&
         iState.panStartCamera &&
         iState.lastPanScreenPos
@@ -858,7 +877,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         const sx = e.clientX - rect.left;
         const sy = e.clientY - rect.top;
         if (iState.pointerDownScreenPos) {
-          const dist = Math.sqrt((sx - iState.pointerDownScreenPos.x)**2 + (sy - iState.pointerDownScreenPos.y)**2);
+          const dist = Math.sqrt((sx - iState.pointerDownScreenPos.x) ** 2 + (sy - iState.pointerDownScreenPos.y) ** 2);
           if (dist < 10 && toolMode === 'select' && !iState.isPanning && iState.activePointers.size === 1) {
             // Find body for tap selection
             const wx = sim.screenToWorld(sx, sy, container.clientWidth, container.clientHeight);
@@ -866,8 +885,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             const selectionRadius = isMobile || e.pointerType === 'touch' ? 30 : 10;
             for (let i = sim.bodies.length - 1; i >= 0; i--) {
               const b = sim.bodies[i];
-              const distSq = (b.position.x - wx.x)**2 + (b.position.y - wx.y)**2;
-              if (distSq <= Math.max(b.radius, selectionRadius / sim.camera.zoom)**2) {
+              const distSq = (b.position.x - wx.x) ** 2 + (b.position.y - wx.y) ** 2;
+              if (distSq <= Math.max(b.radius, selectionRadius / sim.camera.zoom) ** 2) {
                 tappedId = b.id;
                 break;
               }
@@ -891,6 +910,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           iState.hasMomentum = true;
         }
       }
+
+      iState.pointerDownScreenPos = null;
+      iState.lastPinchDist = null;
+      iState.lastPinchMidpoint = null;
 
       if (iState.isDraggingVector && iState.dragStartWorldPos) {
         const rect = container.getBoundingClientRect();
@@ -955,6 +978,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     const onWheel = (e: WheelEvent) => {
       if (streamingRef.current) return;
       const iState = interactionState.current;
+      iState.lastPointerType = 'mouse';
       const rect = container.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -1556,14 +1580,14 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           // HIDE BODY IF IT IS LIFTED OR RETURNING (Animation in progress)
           const isLifted = contextMenuRef.current && contextMenuRef.current.bodyId === b.id;
           const isReturning = hidingBodyIdRef.current === b.id || lastClosedBodyIdRef.current === b.id;
-          
+
           if (isLifted || isReturning) {
             const txt = textCache.get(b.id);
             if (txt) {
               txt.visible = false;
-              txt.alpha = 0; 
+              txt.alpha = 0;
             }
-            continue; 
+            continue;
           }
           const isLense = bgLenses.includes(b);
           const targetGraphics = isLense
@@ -1707,7 +1731,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               ]);
 
               // Apply warp (Relative)
-              if (settingsRef.current.warpEnabled && bgLenses.length > 0) {
+              const warpActive = settingsRef.current.warpEnabled && bgLenses.length > 0;
+              if (warpActive) {
                 for (let i = 0; i < polyPoints.length; i += 2) {
                   let px = polyPoints[i];
                   let py = polyPoints[i + 1];
@@ -1750,7 +1775,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 ]);
 
                 // Apply warp to fire too (Relative)
-                if (settingsRef.current.warpEnabled && bgLenses.length > 0) {
+                if (warpActive) {
                   for (let i = 0; i < fPoly.length; i += 2) {
                     let px = fPoly[i];
                     let py = fPoly[i + 1];
@@ -1791,7 +1816,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 ]);
 
                 // Apply warp to fire core (Relative)
-                if (settingsRef.current.warpEnabled && bgLenses.length > 0) {
+                if (warpActive) {
                   for (let i = 0; i < cPoly.length; i += 2) {
                     let px = cPoly[i];
                     let py = cPoly[i + 1];
@@ -1848,9 +1873,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             }
           }
 
+          const iState = interactionState.current;
+          const isTouch = iState.lastPointerType === 'touch' || (isMobile && iState.lastPointerType !== 'pen' && iState.lastPointerType !== 'mouse');
+          const isPen = iState.lastPointerType === 'pen';
+
           const isHovered =
             b.id === sim.selectedBodyId ||
-            b.id === interactionState.current.hoveredBodyId;
+            (b.id === iState.hoveredBodyId && (!isTouch || isPen));
           if (isHovered) {
             // Dynamic Stroke Scaling for hovered/selected bodies
             if (sim.isBodyBlackHole(b)) {
@@ -1890,7 +1919,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           }
 
           // Labels
-          if (zoom > 0.5 || isHovered) {
+          const showLabels = (zoom > 0.5 || isHovered) && (!isTouch || isPen);
+          if (showLabels) {
             activeLabels.add(b.id);
             let txt = textCache.get(b.id);
             if (txt) txt.visible = true;
@@ -1940,7 +1970,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         }
 
         // Render Preview Body (Ghost) - Shows what's about to be placed
-        if (sim.previewBody) {
+        const isTouch = iState.lastPointerType === 'touch' || (isMobile && iState.lastPointerType !== 'pen' && iState.lastPointerType !== 'mouse');
+        const isPen = iState.lastPointerType === 'pen';
+        if (sim.previewBody && (!isTouch || isPen)) {
           const b = sim.previewBody;
           const isRocket = (b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket';
           const px = (b.position.x - cx) * zoom;
@@ -2334,32 +2366,36 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             })()}
             options={[
               ...(contextMenu.bodyId ? [
-                { 
-                  label: 'View Properties', 
-                  icon: <Info size={16} />, 
-                  onClick: () => onSelectBody(contextMenu.bodyId) 
+                {
+                  label: 'View Properties',
+                  icon: <Info size={16} />,
+                  onClick: () => onSelectBody(contextMenu.bodyId)
                 },
-                { 
-                  label: sim.camera.followingId === contextMenu.bodyId ? 'Stop Following' : 'Follow Camera', 
-                  icon: <Camera size={16} />, 
-                  onClick: () => { sim.camera.followingId = sim.camera.followingId === contextMenu.bodyId ? null : contextMenu.bodyId; } 
+                {
+                  label: sim.camera.followingId === contextMenu.bodyId ? 'Stop Following' : 'Follow Camera',
+                  icon: <Camera size={16} />,
+                  onClick: () => { 
+                    setTimeout(() => {
+                      sim.camera.followingId = sim.camera.followingId === contextMenu.bodyId ? null : contextMenu.bodyId; 
+                    }, 250);
+                  }
                 },
-                { 
-                  label: 'Delete Object', 
-                  icon: <Trash2 size={16} />, 
+                {
+                  label: 'Delete Object',
+                  icon: <Trash2 size={16} />,
                   onClick: () => { sim.bodies = sim.bodies.filter(b => b.id !== contextMenu.bodyId); onSelectBody(null); },
                   color: 'red'
                 }
               ] : [
-                { 
-                  label: 'Reset Camera', 
-                  icon: <RotateCw size={16} />, 
-                  onClick: () => { sim.camera.x = 0; sim.camera.y = 0; sim.camera.zoom = 1; sim.camera.followingId = null; } 
+                {
+                  label: 'Reset Camera',
+                  icon: <RotateCw size={16} />,
+                  onClick: () => { sim.camera.x = 0; sim.camera.y = 0; sim.camera.zoom = 1; sim.camera.followingId = null; }
                 },
-                { 
-                  label: 'Pause / Resume', 
-                  icon: <Play size={16} />, 
-                  onClick: () => { sim.paused = !sim.paused; } 
+                {
+                  label: 'Pause / Resume',
+                  icon: <Play size={16} />,
+                  onClick: () => { sim.paused = !sim.paused; }
                 }
               ])
             ]}
