@@ -12,7 +12,7 @@ import {
   MousePointer2,
   CircleDot,
   Play,
-  Pause,
+  Square,
   FastForward,
   Undo2,
   MousePointerClick,
@@ -23,6 +23,7 @@ import {
   ZoomOut,
   Maximize,
   Ruler,
+  Terminal,
 } from "lucide-react";
 
 // Disable PIXI's buggy static ResizePlugin as we handle resizing manually in the ticker
@@ -185,6 +186,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef(visualSettings);
   const streamingRef = useRef(isStreaming);
+  const [hoveredRocketId, setHoveredRocketId] = useState<string | null>(null);
+  const [, forceRender] = useState(0);
 
   // Sync settings ref
   useEffect(() => {
@@ -210,6 +213,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     lastPinchMidpoint: Vector2 | null;
     orbitParentId: string | null;
     hoveredBodyId: string | null;
+    lastReactHoveredRocketId: string | null;
   }>({
     isDraggingVector: false,
     dragStartWorldPos: null,
@@ -224,6 +228,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     lastPinchMidpoint: null,
     orbitParentId: null,
     hoveredBodyId: null,
+    lastReactHoveredRocketId: null,
   });
 
   // Sync selectedBodyId back to sim so drawing knows
@@ -526,14 +531,31 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       let hoveredId: string | null = null;
       for (let i = sim.bodies.length - 1; i >= 0; i--) {
         const b = sim.bodies[i];
+        let thresholdSq = Math.max(b.radius, 10 / sim.camera.zoom) ** 2;
+        
+        // Hysteresis: if this is the currently hovered rocket, give it a larger hit area (e.g. 150px)
+        // so the user can move the mouse up to the floating menu without it disappearing.
+        if (b.id === iState.lastReactHoveredRocketId) {
+          thresholdSq = Math.max(b.radius, 150 / sim.camera.zoom) ** 2;
+        }
+
         const distSq = (b.position.x - wx.x) ** 2 + (b.position.y - wx.y) ** 2;
-        if (distSq <= Math.max(b.radius, 10 / sim.camera.zoom) ** 2) {
+        if (distSq <= thresholdSq) {
           hoveredId = b.id;
           break;
         }
       }
       iState.hoveredBodyId = hoveredId;
       sim.mouseWorldPos = wx;
+
+      const hoveredBody = hoveredId ? sim.bodies.find(b => b.id === hoveredId) : null;
+      const isRocket = hoveredBody && ((hoveredBody as any).type === 'rocket' || (hoveredBody as any).type === 'heatProtectedRocket');
+      const finalRocketId = isRocket ? hoveredId : null;
+      
+      if (iState.lastReactHoveredRocketId !== finalRocketId) {
+        iState.lastReactHoveredRocketId = finalRocketId;
+        setHoveredRocketId(finalRocketId);
+      }
 
       // multi-touch zoom & pan (Inertia free)
       if (
@@ -759,16 +781,26 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         container.clientHeight,
       );
 
-      let clickedId: string | null = null;
+      let clickedBody: Body | null = null;
       for (let i = sim.bodies.length - 1; i >= 0; i--) {
         const b = sim.bodies[i];
         const distSq = (b.position.x - wx.x) ** 2 + (b.position.y - wx.y) ** 2;
         if (distSq <= Math.max(b.radius, 10 / sim.camera.zoom) ** 2) {
-          clickedId = b.id;
+          clickedBody = b;
           break;
         }
       }
-      sim.camera.followingId = clickedId;
+      
+      if (clickedBody) {
+        if (sim.camera.followingId !== clickedBody.id) {
+          sim.camera.followingId = clickedBody.id;
+        } else {
+          const type = (clickedBody as any).type;
+          if (type === 'rocket' || type === 'heatProtectedRocket') {
+            window.open(`/?editor=${clickedBody.id}`, `Editor_${clickedBody.id}`, 'width=800,height=600,left=200,top=100');
+          }
+        }
+      }
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1495,7 +1527,18 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           }
         }
 
-
+        // Update hover UI DOM position
+        if (iState.lastReactHoveredRocketId) {
+          const hoverEl = document.getElementById('hover-ui-rocket');
+          if (hoverEl) {
+            const b = sim.bodies.find(b => b.id === iState.lastReactHoveredRocketId);
+            if (b) {
+              const sx = (b.position.x - cx) * zoom + container.clientWidth / 2;
+              const sy = (b.position.y - cy) * zoom + container.clientHeight / 2;
+              hoverEl.style.transform = `translate(${sx}px, ${sy - (b.radius * zoom) - 30}px) translateX(-50%) translateY(-100%)`;
+            }
+          }
+        }
 
         const syncTransform = (target: PIXI.Container) => {
           target.position.copyFrom(worldBgContainer.position);
@@ -1686,6 +1729,61 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         className="absolute inset-0 touch-none pointer-events-auto"
         style={{ touchAction: "none" }}
       />
+      
+      {/* DOM Hover UI */}
+      {hoveredRocketId && (() => {
+        const b = sim.bodies.find(b => b.id === hoveredRocketId) as any;
+        if (!b) return null;
+        return (
+          <div 
+            id="hover-ui-rocket"
+            className="absolute left-0 top-0 pointer-events-auto flex items-center bg-[#11141b]/90 backdrop-blur border border-white/20 shadow-2xl rounded-xl p-1.5 gap-1.5 z-50 transition-opacity duration-200"
+            onMouseEnter={() => {
+              // Lock hover while interacting with menu
+              interactionState.current.lastReactHoveredRocketId = hoveredRocketId;
+              setHoveredRocketId(hoveredRocketId);
+            }}
+            onMouseLeave={() => {
+              interactionState.current.lastReactHoveredRocketId = null;
+              setHoveredRocketId(null);
+            }}
+          >
+            <button 
+              onClick={() => {
+                if (b.isAutopilotActive) {
+                  sim.stopAutopilot(b.id);
+                } else if (b.script) {
+                  // The user can't pass 'logCallback' here properly since we refactored it. 
+                  // But wait, we refactored startAutopilot to take vehicleId.
+                  // We'll pass a dummy log callback because the simulation now creates its own and broadcasts.
+                  sim.startAutopilot(b.script, b.id, (msg) => {
+                    const time = sim.missionTime;
+                    (window as any)._fullLogBuffer = (window as any)._fullLogBuffer || [];
+                    (window as any)._fullLogBuffer.push({ time, msg });
+                  });
+                } else {
+                  // No script? Just open editor.
+                  window.open(`/?editor=${b.id}`, `Editor_${b.id}`, 'width=800,height=600,left=200,top=100');
+                }
+                forceRender(p => p + 1);
+              }}
+              title={b.isAutopilotActive ? "Disengage Autopilot" : "Engage Autopilot"}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${b.isAutopilotActive ? 'bg-red-500/20 text-red-400 hover:bg-red-500/40' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40'}`}
+            >
+              {b.isAutopilotActive ? <Square size={12} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+            </button>
+            <button 
+              onClick={() => {
+                window.open(`/?editor=${b.id}`, `Editor_${b.id}`, 'width=800,height=600,left=200,top=100');
+              }}
+              title="Edit Autopilot Script"
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/15 transition-colors text-white"
+            >
+              <Terminal size={14} />
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 };

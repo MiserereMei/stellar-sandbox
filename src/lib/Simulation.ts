@@ -130,10 +130,6 @@ export class Simulation {
     this.timeScale = 1.0;
     this.missionTime = 0;
     this.secondsPerSimSecond = 1.0;
-    this.isAutopilotActive = false;
-    this.targetLaunchTime = null;
-    this.launchEpoch = null;
-    this.activeBoosters = [];
     this.cinematicCamera.active = false;
   }
 
@@ -467,12 +463,13 @@ export class Simulation {
     this.camera.followingId = bhId;
   }
 
-  public isAutopilotActive = false;
   public missionTime = 0;
+  
+  // Kept for backward compatibility or global fallback
+  public get isAutopilotActive(): boolean {
+    return this.bodies.some(b => (b as any).isAutopilotActive);
+  }
   public currentScript = '';
-  public targetLaunchTime: number | null = null;
-  public launchEpoch: number | null = null;
-  public activeBoosters: { thrust: number, endTime: number, cbId?: number }[] = [];
 
   public cinematicCamera = {
     active: false,
@@ -573,78 +570,103 @@ export class Simulation {
     }
   }
 
-  getAltitude(): number {
-    if (!this.vehicle) return 0;
-    const dominant = this.getDominantBody(this.vehicle.position);
+  getAltitude(vehicle: any = this.vehicle): number {
+    if (!vehicle) return 0;
+    const dominant = this.getDominantBody(vehicle.position);
     if (!dominant) return 999999;
-    const dx = this.vehicle.position.x - dominant.position.x;
-    const dy = this.vehicle.position.y - dominant.position.y;
+    const dx = vehicle.position.x - dominant.position.x;
+    const dy = vehicle.position.y - dominant.position.y;
     return Math.sqrt(dx * dx + dy * dy) - dominant.radius;
   }
 
-  getRelativeSpeed(): number {
-    if (!this.vehicle) return 0;
-    const dominant = this.getDominantBody(this.vehicle.position);
+  getRelativeSpeed(vehicle: any = this.vehicle): number {
+    if (!vehicle) return 0;
+    const dominant = this.getDominantBody(vehicle.position);
     if (!dominant) return 0;
-    const relVx = this.vehicle.velocity.x - (dominant.velocity ? dominant.velocity.x : 0);
-    const relVy = this.vehicle.velocity.y - (dominant.velocity ? dominant.velocity.y : 0);
+    const relVx = vehicle.velocity.x - (dominant.velocity ? dominant.velocity.x : 0);
+    const relVy = vehicle.velocity.y - (dominant.velocity ? dominant.velocity.y : 0);
     return Math.sqrt(relVx * relVx + relVy * relVy);
   }
 
-  getRadialSpeed(): number {
-    if (!this.vehicle) return 0;
-    const dominant = this.getDominantBody(this.vehicle.position);
+  getRadialSpeed(vehicle: any = this.vehicle): number {
+    if (!vehicle) return 0;
+    const dominant = this.getDominantBody(vehicle.position);
     if (!dominant) return 0;
-    const dx = this.vehicle.position.x - dominant.position.x;
-    const dy = this.vehicle.position.y - dominant.position.y;
+    const dx = vehicle.position.x - dominant.position.x;
+    const dy = vehicle.position.y - dominant.position.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const relVx = this.vehicle.velocity.x - (dominant.velocity ? dominant.velocity.x : 0);
-    const relVy = this.vehicle.velocity.y - (dominant.velocity ? dominant.velocity.y : 0);
-    // Dot product for radial component
+    const relVx = vehicle.velocity.x - (dominant.velocity ? dominant.velocity.x : 0);
+    const relVy = vehicle.velocity.y - (dominant.velocity ? dominant.velocity.y : 0);
     return (relVx * dx + relVy * dy) / dist;
   }
 
-  getTangentialSpeed(): number {
-    const total = this.getRelativeSpeed();
-    const radial = this.getRadialSpeed();
+  getTangentialSpeed(vehicle: any = this.vehicle): number {
+    const total = this.getRelativeSpeed(vehicle);
+    const radial = this.getRadialSpeed(vehicle);
     return Math.sqrt(Math.max(0, total * total - radial * radial));
   }
 
-  startAutopilot(script: string, logCallback: (msg: string) => void) {
-    this.autopilotLog = logCallback;
+  startAutopilot(script: string, vehicleId: string, logCallback: (msg: string) => void) {
+    const v = this.bodies.find(b => b.id === vehicleId) as any;
+    if (!v) return;
+
+    if (!v.autopilotLogs) v.autopilotLogs = [];
+
+    // Custom logger that saves to vehicle and broadcasts
+    v.autopilotLog = (msg: string) => {
+      const time = this.missionTime;
+      v.autopilotLogs.push({ time, msg });
+      
+      // Limit to 1000 logs internally
+      if (v.autopilotLogs.length > 1000) v.autopilotLogs.shift();
+
+      // Broadcast to EditorWindow
+      const channel = new BroadcastChannel('stellar-autopilot-sync');
+      channel.postMessage({ type: 'new_log', data: { vehicleId: v.id, time, msg } });
+      channel.close();
+
+      // Call global UI callback (for legacy HUD/Sidebar)
+      logCallback(msg);
+    };
+
+    v.script = script;
+    
+    if (!v.sandbox) {
+      v.sandbox = new AutopilotSandbox();
+    }
+    
     this.missionTime = 0;
 
-    this.sandbox.onCommand = (command: string, args: any[]) => {
+    v.sandbox.onCommand = (command: string, args: any[]) => {
       if (command === 'init_success') {
-        this.isAutopilotActive = true;
-        this.paused = false; // Ensure simulation unpauses when autopilot engages
-        if (args[0] && this.targetLaunchTime === null) {
-          this.targetLaunchTime = 0; // Auto-schedule for T-0 if script has onLaunch but didn't call setLaunchTime
+        v.isAutopilotActive = true;
+        // Do not auto-unpause simulation, let user control it
+        if (args[0] && v.targetLaunchTime === undefined) {
+          v.targetLaunchTime = 0; 
         }
         return;
       }
-      if (!this.vehicle) return;
 
       switch (command) {
         case 'setThrust':
           const amount = Math.max(0, Math.min(1, args[0]));
-          (this.vehicle as any).thrustAmount = amount;
-          (this.vehicle as any).thrusting = amount > 0.01;
-          if (amount > 0.01) (this.vehicle as any).parentBodyId = null;
+          v.thrustAmount = amount;
+          v.thrusting = amount > 0.01;
+          if (amount > 0.01) v.parentBodyId = null;
           break;
         case 'setRotate':
           const rot = Math.max(-1, Math.min(1, args[0]));
-          (this.vehicle as any).rotationAmount = rot;
-          (this.vehicle as any).rotatingLeft = rot < -0.01;
-          (this.vehicle as any).rotatingRight = rot > 0.01;
-          if (Math.abs(rot) > 0.01) (this.vehicle as any).parentBodyId = null;
+          v.rotationAmount = rot;
+          v.rotatingLeft = rot < -0.01;
+          v.rotatingRight = rot > 0.01;
+          if (Math.abs(rot) > 0.01) v.parentBodyId = null;
           break;
         case 'setPitch':
-          (this.vehicle as any).targetPitch = args[0];
+          v.targetPitch = args[0];
           break;
         case 'setLaunchTime':
-          this.targetLaunchTime = args[0];
-          this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${args[0]}s`);
+          v.targetLaunchTime = args[0];
+          v.autopilotLog(`MISSION SCHEDULED: T-0 at T+${args[0]}s`);
           break;
         case 'speak':
           if (!('speechSynthesis' in window)) {
@@ -676,12 +698,13 @@ export class Simulation {
           window.speechSynthesis.speak(utter);
           break;
         case 'igniteBooster':
-          this.activeBoosters.push({
+          if (!v.activeBoosters) v.activeBoosters = [];
+          v.activeBoosters.push({
             thrust: args[0],
             endTime: this.missionTime + args[1],
             cbId: args[2]
-          } as any);
-          this.autopilotLog(`BOOSTER IGNITION: ${(args[0] / 1e6).toFixed(1)} MN for ${args[1]}s`);
+          });
+          v.autopilotLog(`BOOSTER IGNITION: ${(args[0] / 1e6).toFixed(1)} MN for ${args[1]}s`);
           break;
         case 'setCameraZoom':
           this.cinematicCamera.active = true;
@@ -709,41 +732,44 @@ export class Simulation {
           this.cinematicCamera.shake = args[0];
           break;
         case 'log':
-          this.autopilotLog(args[0]);
+          v.autopilotLog(args[0]);
           break;
       }
     };
 
-    this.sandbox.onError = (err) => {
-      this.autopilotLog(err);
+    v.sandbox.onError = (err: string) => {
+      v.autopilotLog(err);
       if (err.includes('Init Error') || err.includes('Compilation Error')) {
-        this.stopAutopilot();
+        this.stopAutopilot(vehicleId);
       }
     };
 
     try {
-      this.sandbox.start(script);
+      v.sandbox.start(script);
     } catch (err: any) {
-      this.autopilotLog("Sandbox Error: " + err.message);
+      v.autopilotLog("Sandbox Error: " + err.message);
     }
   }
 
-  stopAutopilot() {
-    this.isAutopilotActive = false;
-    this.sandbox.stop();
-    this.targetLaunchTime = null;
-    this.launchEpoch = null;
-    this.activeBoosters = [];
+  stopAutopilot(vehicleId: string) {
+    const v = this.bodies.find(b => b.id === vehicleId) as any;
+    if (!v) return;
+
+    v.isAutopilotActive = false;
+    if (v.sandbox) v.sandbox.stop();
+    v.targetLaunchTime = null;
+    v.launchEpoch = null;
+    v.activeBoosters = [];
+    
     this.cinematicCamera.active = false;
     this.cinematicCamera.shake = 0;
     this.cinematicCamera.offsetX = 0;
     this.cinematicCamera.offsetY = 0;
     this.cinematicCamera.zoomScale = -1;
-    if (this.vehicle) {
-      (this.vehicle as any).thrusting = false;
-      (this.vehicle as any).rotatingLeft = false;
-      (this.vehicle as any).rotatingRight = false;
-    }
+    
+    v.thrusting = false;
+    v.rotatingLeft = false;
+    v.rotatingRight = false;
   }
 
   loadOrbitMission() {
@@ -935,24 +961,24 @@ export class Simulation {
 
   stepPhysics(stepDt: number, wasmActive: boolean = false) {
 
-    // Autopilot Execution
-    if (this.isAutopilotActive) {
-      if (!this.vehicle) {
-        this.autopilotLog("Cannot communicate with ship.");
-        this.stopAutopilot();
-      } else {
+    // Autopilot Execution & Vehicle Controls
+    for (const b of this.bodies) {
+      const v = b as any;
+      if (v.type !== 'rocket' && v.type !== 'heatProtectedRocket') continue;
+
+      if (v.isAutopilotActive && v.sandbox) {
         const METER_PER_UNIT = 6371000;
         const KG_PER_UNIT_MASS = 5.972e24;
 
-        const formatBody = (b: Body) => {
-          const dx = b.position.x - this.vehicle!.position.x;
-          const dy = b.position.y - this.vehicle!.position.y;
+        const formatBody = (bd: Body) => {
+          const dx = bd.position.x - v.position.x;
+          const dy = bd.position.y - v.position.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           return {
-            id: b.id,
-            name: b.name,
-            mass: b.mass * KG_PER_UNIT_MASS,
-            circumference: 2 * Math.PI * b.radius * METER_PER_UNIT,
+            id: bd.id,
+            name: bd.name,
+            mass: bd.mass * KG_PER_UNIT_MASS,
+            circumference: 2 * Math.PI * bd.radius * METER_PER_UNIT,
             relativeX: dx * METER_PER_UNIT,
             relativeY: dy * METER_PER_UNIT,
             distance: dist * METER_PER_UNIT,
@@ -960,68 +986,61 @@ export class Simulation {
           };
         };
 
-        const dom = this.getDominantBody(this.vehicle.position);
+        const dom = this.getDominantBody(v.position);
         let gravitySim = 0;
         let horizonAngle = 0;
         let progradeAngle = 0;
 
         if (dom) {
-          const dx = dom.position.x - this.vehicle.position.x;
-          const dy = dom.position.y - this.vehicle.position.y;
+          const dx = dom.position.x - v.position.x;
+          const dy = dom.position.y - v.position.y;
           const distSq = dx * dx + dy * dy;
           gravitySim = (this.G * dom.mass) / Math.max(0.0001, distSq);
           horizonAngle = (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
 
-          const rvx = this.vehicle.velocity.x - dom.velocity.x;
-          const rvy = this.vehicle.velocity.y - dom.velocity.y;
+          const rvx = v.velocity.x - dom.velocity.x;
+          const rvy = v.velocity.y - dom.velocity.y;
           progradeAngle = Math.atan2(rvy, rvx) * (180 / Math.PI);
         }
 
         const fcState = {
-          thrust: (this.vehicle as any).thrusting ? 1.0 : 0.0,
-          rotate: (this.vehicle as any).rotatingLeft ? -1.0 : ((this.vehicle as any).rotatingRight ? 1.0 : 0.0),
-          rotation: this.vehicle.rotation * (180 / Math.PI),
-          angularVelocity: this.vehicle.angularVelocity * (180 / Math.PI),
-          altitude: this.getAltitude(),
-          relativeSpeed: this.getRelativeSpeed(),
-          radialSpeed: this.getRadialSpeed(),
-          tangentialSpeed: this.getTangentialSpeed(),
+          thrust: v.thrusting ? 1.0 : 0.0,
+          rotate: v.rotatingLeft ? -1.0 : (v.rotatingRight ? 1.0 : 0.0),
+          rotation: v.rotation * (180 / Math.PI),
+          angularVelocity: v.angularVelocity * (180 / Math.PI),
+          altitude: this.getAltitude(v),
+          relativeSpeed: this.getRelativeSpeed(v),
+          radialSpeed: this.getRadialSpeed(v),
+          tangentialSpeed: this.getTangentialSpeed(v),
           dominantBody: dom ? formatBody(dom) : null,
-          vehicle: formatBody(this.vehicle),
+          vehicle: formatBody(v),
           bodies: this.bodies.map(formatBody),
           gravityMagnitude: gravitySim / 1.541e-6,
           horizonAngle,
           progradeAngle,
-          verticalSpeed: this.getRadialSpeed(),
-          horizontalSpeed: this.getTangentialSpeed()
+          verticalSpeed: this.getRadialSpeed(v),
+          horizontalSpeed: this.getTangentialSpeed(v)
         };
 
-        // Check if we've reached the scheduled launch time
-        if (this.targetLaunchTime !== null && this.missionTime >= this.targetLaunchTime) {
-          this.launchEpoch = this.missionTime; // Record exact T-0
-          this.autopilotLog(`T-0! Launch sequence initiated at T+${this.missionTime.toFixed(1)}s`);
-          this.sandbox.launch(fcState);
-          this.targetLaunchTime = null; // fire once
+        if (v.targetLaunchTime !== null && v.targetLaunchTime !== undefined && this.missionTime >= v.targetLaunchTime) {
+          v.launchEpoch = this.missionTime; 
+          if (v.autopilotLog) v.autopilotLog(`T-0! Launch sequence initiated at T+${this.missionTime.toFixed(1)}s`);
+          v.sandbox.launch(fcState);
+          v.targetLaunchTime = null; 
         }
 
-        this.sandbox.step(this.missionTime, fcState);
+        v.sandbox.step(this.missionTime, fcState);
       }
-    }
 
-    // Vehicle controls
-    if (this.vehicle) {
-      const v = this.vehicle;
       // Apply angular momentum
-      const torque = this.isAutopilotActive ? 5.0 : 5.0 / Math.max(1, this.timeScale);
-      if (this.isAutopilotActive) {
-        let rotAmount = (v as any).rotationAmount || 0;
+      const torque = v.isAutopilotActive ? 5.0 : 5.0 / Math.max(1, this.timeScale);
+      if (v.isAutopilotActive) {
+        let rotAmount = v.rotationAmount || 0;
 
-        // Auto-alignment logic for setPitch
-        const targetPitch = (v as any).targetPitch;
+        const targetPitch = v.targetPitch;
         if (targetPitch !== undefined && targetPitch !== null) {
           const dom = this.getDominantBody(v.position);
           if (dom) {
-            // Horizon is perpendicular to the vector from planet center
             const dx = dom.position.x - v.position.x;
             const dy = dom.position.y - v.position.y;
             const horizonBase = (Math.atan2(dy, dx) + Math.PI / 2) * (180 / Math.PI);
@@ -1031,7 +1050,6 @@ export class Simulation {
             while (angleDiff > 180) angleDiff -= 360;
             while (angleDiff < -180) angleDiff += 360;
 
-            // PD Controller for smooth alignment
             const p = 0.05;
             const d = 0.15;
             rotAmount = angleDiff * p - (v.angularVelocity * (180 / Math.PI)) * d;
@@ -1041,42 +1059,38 @@ export class Simulation {
 
         v.angularVelocity += rotAmount * torque * stepDt;
       } else {
-        if ((v as any).rotatingLeft) v.angularVelocity -= torque * stepDt;
-        if ((v as any).rotatingRight) v.angularVelocity += torque * stepDt;
+        if (v.rotatingLeft) v.angularVelocity -= torque * stepDt;
+        if (v.rotatingRight) v.angularVelocity += torque * stepDt;
       }
 
-      // Friction: light damping for angular stability
       v.angularVelocity *= Math.pow(0.1, stepDt);
-
       v.rotation += v.angularVelocity * stepDt;
-
 
       // Apply thrust
       let totalAcceleration = 0;
-      if (this.isAutopilotActive) {
-        const thrustAmount = (v as any).thrustAmount || 0;
-        // Force a minimum capable thrust for Artemis/SLS to ensure it can SSTO
-        const effectiveThrustPower = Math.max(v.thrustPower, 2.5e-6);
+      if (v.isAutopilotActive) {
+        const thrustAmount = v.thrustAmount || 0;
+        const effectiveThrustPower = Math.max(v.thrustPower || 0, 2.5e-6);
         totalAcceleration += thrustAmount * effectiveThrustPower;
-      } else if ((v as any).thrusting) {
-        totalAcceleration += v.thrustPower;
+      } else if (v.thrusting) {
+        totalAcceleration += (v.thrustPower || 0);
       }
 
       // Apply booster thrusts
-      if (this.activeBoosters && this.activeBoosters.length > 0) {
+      if (v.activeBoosters && v.activeBoosters.length > 0) {
         const METER_PER_UNIT = 6371000;
         const KG_PER_UNIT_MASS = 5.972e24;
         const vehicleMassKg = v.mass * KG_PER_UNIT_MASS;
 
-        for (let i = this.activeBoosters.length - 1; i >= 0; i--) {
-          const b = this.activeBoosters[i];
-          if (this.missionTime >= b.endTime) {
-            if (b.cbId !== undefined && b.cbId !== null) {
-              this.sandbox.fireCallback(b.cbId);
+        for (let i = v.activeBoosters.length - 1; i >= 0; i--) {
+          const booster = v.activeBoosters[i];
+          if (this.missionTime >= booster.endTime) {
+            if (booster.cbId !== undefined && booster.cbId !== null) {
+              if (v.sandbox) v.sandbox.fireCallback(booster.cbId);
             }
-            this.activeBoosters.splice(i, 1);
+            v.activeBoosters.splice(i, 1);
           } else {
-            const a_meters = b.thrust / vehicleMassKg;
+            const a_meters = booster.thrust / vehicleMassKg;
             const a_sim = a_meters / METER_PER_UNIT;
             totalAcceleration += a_sim;
           }
@@ -1084,25 +1098,23 @@ export class Simulation {
       }
 
       if (totalAcceleration > 0) {
-        if ((v as any).parentBodyId) {
-          // BREAK FREE: Move a significant bit away from the surface to avoid immediate re-parenting by collision system
-          const parent = this.bodies.find(b => b.id === (v as any).parentBodyId);
+        if (v.parentBodyId) {
+          const parent = this.bodies.find(bd => bd.id === v.parentBodyId);
           if (parent) {
             const dx = v.position.x - parent.position.x;
             const dy = v.position.y - parent.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            // Nudge by 10% of rocket radius to ensure clear separation
             const nudgeDist = (v.radius || 0.0001) * 0.1;
             v.position.x += (dx / dist) * nudgeDist;
             v.position.y += (dy / dist) * nudgeDist;
           }
         }
-        (v as any).parentBodyId = null;
-        (v as any).isLaunchingOrThrusting = true;
+        v.parentBodyId = null;
+        v.isLaunchingOrThrusting = true;
         v.velocity.x += Math.cos(v.rotation) * totalAcceleration * stepDt;
         v.velocity.y += Math.sin(v.rotation) * totalAcceleration * stepDt;
       } else {
-        (v as any).isLaunchingOrThrusting = false;
+        v.isLaunchingOrThrusting = false;
       }
     }
 

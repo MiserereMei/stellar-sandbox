@@ -8,6 +8,7 @@ import { AIChat } from './components/AIChat';
 import { AutopilotConsole } from './components/AutopilotConsole';
 import { StreamingHUD } from './components/StreamingHUD';
 import { AnimatePresence } from 'motion/react';
+import EditorWindow from './components/EditorWindow';
 
 export type ToolMode = 'select' | 'add' | 'ruler';
 export type AddMode = 'orbit' | 'static' | 'velocity';
@@ -22,6 +23,11 @@ export type VisualSettings = {
 export type ActivePopUp = 'ai' | 'add' | 'settings' | 'jump' | null;
 
 export default function App() {
+  // If we are in Editor mode, just render the EditorWindow
+  if (window.location.search.includes('editor=')) {
+    return <EditorWindow />;
+  }
+
   const sim = useMemo(() => new Simulation(), []);
   const [toolMode, setToolMode] = useState<ToolMode>('select');
   const [addMode, setAddMode] = useState<AddMode>('orbit');
@@ -72,6 +78,63 @@ export default function App() {
     (window as any)._fullLogBuffer = [];
     setAutopilotLogs([]);
   }, []);
+
+  // BroadcastChannel for Editor Sync
+  useEffect(() => {
+    const channel = new BroadcastChannel('stellar-autopilot-sync');
+    
+    // Listen for messages from popup editors
+    channel.onmessage = (event) => {
+      const { type, data } = event.data;
+      if (!data.vehicleId) return;
+      
+      const v = sim.bodies.find(b => b.id === data.vehicleId) as any;
+      if (!v) return;
+
+      if (type === 'ping') {
+        channel.postMessage({
+          type: 'init_state',
+          data: {
+            vehicleId: v.id,
+            vehicleName: v.name,
+            isActive: !!v.isAutopilotActive,
+            script: v.script || sim.currentScript || '',
+            logs: v.autopilotLogs || []
+          }
+        });
+      } else if (type === 'update_script') {
+        v.script = data.script;
+      } else if (type === 'toggle_autopilot') {
+        if (v.isAutopilotActive) {
+          sim.stopAutopilot(v.id);
+        } else {
+          v.script = data.script; // ensure latest script
+          sim.startAutopilot(v.script, v.id, (msg) => {
+            channel.postMessage({ type: 'new_log', data: { vehicleId: v.id, time: sim.missionTime, msg } });
+          });
+        }
+        channel.postMessage({ type: 'autopilot_state', data: { vehicleId: v.id, isActive: !!v.isAutopilotActive } });
+      } else if (type === 'clear_logs_request') {
+        v.autopilotLogs = [];
+      }
+    };
+
+    // Override autopilotLog function to also broadcast to Editor
+    const originalLog = sim.autopilotLog;
+    sim.autopilotLog = (msg: string) => {
+      // Handled in Simulation.ts
+    };
+
+    const handleBeforeUnload = () => {
+      channel.postMessage({ type: 'close_all_editors' });
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      channel.close();
+    };
+  }, [sim]);
 
   // Function to download the infinite log
   const downloadFullLog = useCallback(() => {
@@ -163,7 +226,10 @@ export default function App() {
         sim.paused = false;
         if (sim.currentScript && !sim.isAutopilotActive) {
           try {
-            sim.startAutopilot(sim.currentScript, addAutopilotLog);
+            const v = sim.vehicle || sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
+            if (v) {
+               sim.startAutopilot(sim.currentScript, v.id, addAutopilotLog);
+            }
           } catch (_) { /* ignore compile errors on launch */ }
         }
         setStreamingMode(true);

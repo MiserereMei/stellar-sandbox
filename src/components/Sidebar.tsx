@@ -109,31 +109,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
           </div>
           
           <div className="space-y-5">
-            {sim.vehicle && body.id === sim.vehicle.id && (
+            {((body as any).type === 'rocket' || (body as any).type === 'heatProtectedRocket') && (
               <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl space-y-4">
                 <span className="text-[10px] uppercase tracking-wider text-blue-400 font-bold">Vehicle Settings</span>
+                
+                <button 
+                  onClick={() => {
+                    window.open(`/?editor=${body.id}`, `Editor_${body.id}`, 'width=800,height=600,left=200,top=100');
+                  }}
+                  className="w-full py-2 flex items-center justify-center rounded-xl text-[10px] uppercase font-bold tracking-widest transition-colors border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50"
+                >
+                  Edit Autopilot
+                </button>
+
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Thrust Power</span>
                   <div className="flex items-center w-full bg-black/40 rounded-xl border border-white/5 overflow-hidden">
                     <button 
                       onClick={() => {
-                        sim.vehicle!.thrustPower = Math.max(1e-20, sim.vehicle!.thrustPower / 2);
+                        (body as any).thrustPower = Math.max(1e-20, ((body as any).thrustPower || 0) / 2);
                         setBody({...body});
                       }} 
                       className="px-2 py-2 text-[10px] font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-r border-white/5 shrink-0"
                     >/2</button>
                     <input 
                       type="text"
-                      value={sim.vehicle.thrustPower === 0 ? "0" : sim.vehicle.thrustPower.toExponential(2).replace('e+0', '')}
+                      value={(body as any).thrustPower === 0 ? "0" : ((body as any).thrustPower || 0).toExponential(2).replace('e+0', '')}
                       onChange={e => {
                         const val = parseFloat(e.target.value);
-                        if (!isNaN(val)) { sim.vehicle!.thrustPower = val; setBody({...body}); }
+                        if (!isNaN(val)) { (body as any).thrustPower = val; setBody({...body}); }
                       }}
                       className="font-mono text-[12px] text-white bg-transparent flex-1 text-right outline-none px-2 py-2"
                     />
                     <button 
                       onClick={() => {
-                        sim.vehicle!.thrustPower *= 2;
+                        (body as any).thrustPower = ((body as any).thrustPower || 0) * 2;
                         setBody({...body});
                       }} 
                       className="px-2 py-2 text-[10px] font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-l border-white/5 shrink-0"
@@ -142,9 +152,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Max Integrity Energy</span>
-                  <input type="number" value={sim.vehicle.maxKineticEnergy.toFixed(0)} onChange={e => {
+                  <input type="number" value={((body as any).maxKineticEnergy || 0).toFixed(0)} onChange={e => {
                     const val = parseFloat(e.target.value);
-                    if (!isNaN(val)) { sim.vehicle!.maxKineticEnergy = val; setBody({...body}); }
+                    if (!isNaN(val)) { (body as any).maxKineticEnergy = val; setBody({...body}); }
                   }} className="font-mono text-[12px] text-white bg-black/40 px-3 py-2 rounded-xl border border-white/5 w-full outline-none" />
                 </div>
               </div>
