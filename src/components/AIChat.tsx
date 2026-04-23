@@ -484,7 +484,7 @@ ${FC_API_DOC}
           style={anchorRect ? {
             left: anchorRect.side === 'left' ? anchorRect.left : undefined,
             right: anchorRect.side === 'right' ? (window.innerWidth - anchorRect.left) : undefined,
-            bottom: window.innerHeight - anchorRect.top + 16,
+            bottom: '80px',
           } : undefined}
           initial={{ opacity: 0, y: 20, x: anchorRect ? 0 : '-50%' }}
           animate={{ opacity: 1, y: 0, x: anchorRect ? 0 : '-50%' }}
@@ -494,7 +494,7 @@ ${FC_API_DOC}
           <div className="bg-[#11141b]/60 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden" style={{ maxHeight: '520px' }}>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
                 <Sparkles size={13} className="text-purple-400" />
                 <span>AI COORDINATOR</span>

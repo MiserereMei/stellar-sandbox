@@ -341,7 +341,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <div className="absolute left-0 bottom-0 h-full bg-blue-500/20 transition-all duration-75" style={{ width: `${jumpProgress * 100}%` }} />
               )}
               <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-0.5 group-hover:text-blue-400 transition-colors z-10 relative">
-                {isJumping ? 'Calculating...' : 'Epoch Date'}
+                {isJumping ? 'Calculating...' : 'Date'}
               </span>
               <span ref={dateRef} className="text-[12px] font-mono font-bold text-white tracking-tight z-10 relative">
                 {sim.getCurrentDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
@@ -410,275 +410,285 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <motion.div
             style={anchors.add ? {
               left: anchors.add.left,
-              bottom: window.innerHeight - (anchors.add.top ?? 0) + 16
+              bottom: '80px'
             } : undefined}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="fixed bg-[#0c1016]/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-4 flex flex-col gap-4 z-[100] w-[500px] will-change-transform"
+            className="fixed bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl flex flex-col z-[100] w-[500px] overflow-hidden will-change-transform"
           >
-            <button
-              onClick={() => setActivePopUp(null)}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors z-10"
-            >
-              <X size={16} />
-            </button>
-            <div className="flex bg-white/5 p-1 rounded-lg gap-1 mr-10 overflow-x-auto no-scrollbar">
-              {(['body', 'vehicle', 'system', 'simulation', 'exoplanets'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    setAddMenuTab(tab);
-                    if (tab === 'exoplanets' && oecSystems.length === 0) fetchOEC();
-                    if (tab === 'vehicle') {
-                      setAddMode('static');
-                      sim.creationTemplate.presetType = 'rocket';
-                      setCreationPreset({ ...creationPreset, colorType: 'rocket' });
-                    }
-                  }}
-                  className={`flex-1 text-[9px] font-bold uppercase tracking-widest py-1.5 rounded-md transition-all ${addMenuTab === tab
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
-                >
-                  {tab}
-                </button>
-              ))}
+            {/* Unified Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
+                <Plus size={13} className="text-blue-400" />
+                <span>CONSTRUCTION CORE</span>
+              </div>
+              <button
+                onClick={() => setActivePopUp(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            {addMenuTab === 'vehicle' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
+            <div className="p-4 flex flex-col gap-4">
+              <div className="flex bg-white/5 p-1 rounded-lg gap-1 overflow-x-auto no-scrollbar">
+                {(['body', 'vehicle', 'system', 'simulation', 'exoplanets'] as const).map(tab => (
                   <button
+                    key={tab}
                     onClick={() => {
-                      sim.creationTemplate.presetType = 'rocket';
-                      setCreationPreset({ ...creationPreset, colorType: 'rocket' });
-                      setToolMode('add');
+                      setAddMenuTab(tab);
+                      if (tab === 'exoplanets' && oecSystems.length === 0) fetchOEC();
+                      if (tab === 'vehicle') {
+                        setAddMode('static');
+                        sim.creationTemplate.presetType = 'rocket';
+                        setCreationPreset({ ...creationPreset, colorType: 'rocket' });
+                      }
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${sim.creationTemplate.presetType === 'rocket'
-                      ? 'border-blue-500 bg-blue-500/10 text-white'
-                      : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
+                    className={`flex-1 text-[9px] font-bold uppercase tracking-widest py-1.5 rounded-md transition-all ${addMenuTab === tab
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                       }`}
                   >
-                    <div className="w-4 h-4 bg-white rounded-full" />
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Standard Rocket</span>
+                    {tab}
                   </button>
-                  <button
-                    onClick={() => {
-                      sim.creationTemplate.presetType = 'heatProtectedRocket';
-                      setCreationPreset({ ...creationPreset, colorType: 'heatProtectedRocket' });
-                      setToolMode('add');
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${sim.creationTemplate.presetType === 'heatProtectedRocket'
-                      ? 'border-blue-500 bg-blue-500/10 text-white'
-                      : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
-                      }`}
-                  >
-                    <div className="w-4 h-4 bg-orange-500 rounded-full" />
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Heat-Protected Rocket</span>
-                  </button>
-                </div>
-                <div className="pt-2 border-t border-white/10 space-y-1">
-                  {[
-                    { id: 'orbit', label: 'Orbital Placement', icon: <MousePointerClick size={12} /> },
-                    { id: 'static', label: 'Static Deployment', icon: <CircleDot size={12} /> },
-                    { id: 'velocity', label: 'Kinetic Launch', icon: <FastForward size={12} /> }
-                  ].map(m => (
+                ))}
+              </div>
+
+              {addMenuTab === 'vehicle' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
-                      key={m.id}
-                      onClick={() => { setAddMode(m.id as AddMode); setToolMode('add'); setActivePopUp(null); }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all ${addMode === m.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-white/5 hover:text-white'
+                      onClick={() => {
+                        sim.creationTemplate.presetType = 'rocket';
+                        setCreationPreset({ ...creationPreset, colorType: 'rocket' });
+                        setToolMode('add');
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${sim.creationTemplate.presetType === 'rocket'
+                        ? 'border-blue-500 bg-blue-500/10 text-white'
+                        : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
                         }`}
                     >
-                      <span className="flex items-center gap-2">{m.icon} {m.label}</span>
+                      <div className="w-4 h-4 bg-white rounded-full" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Standard Rocket</span>
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {addMenuTab === 'body' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
-                  {(['star', 'planet', 'moon', 'comet', 'blackhole'] as const).map(p => {
-                    const tempSim = new Simulation();
-                    tempSim.creationTemplate.presetType = p;
-                    const meta = tempSim.getBodyMetadataFromPreset();
-                    return (
+                    <button
+                      onClick={() => {
+                        sim.creationTemplate.presetType = 'heatProtectedRocket';
+                        setCreationPreset({ ...creationPreset, colorType: 'heatProtectedRocket' });
+                        setToolMode('add');
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${sim.creationTemplate.presetType === 'heatProtectedRocket'
+                        ? 'border-blue-500 bg-blue-500/10 text-white'
+                        : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
+                        }`}
+                    >
+                      <div className="w-4 h-4 bg-orange-500 rounded-full" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Heat-Protected Rocket</span>
+                    </button>
+                  </div>
+                  <div className="pt-2 border-t border-white/10 space-y-1">
+                    {[
+                      { id: 'orbit', label: 'Orbital Placement', icon: <MousePointerClick size={12} /> },
+                      { id: 'static', label: 'Static Deployment', icon: <CircleDot size={12} /> },
+                      { id: 'velocity', label: 'Kinetic Launch', icon: <FastForward size={12} /> }
+                    ].map(m => (
                       <button
-                        key={p}
-                        onClick={() => {
-                          sim.creationTemplate.presetType = p;
-                          setCreationPreset({ ...creationPreset, colorType: p });
-                          if (p === 'star' || p === 'blackhole') setAddMode('static');
-                          else if (p === 'comet') setAddMode('velocity');
-                          else setAddMode('orbit');
-                        }}
-                        className={`flex flex-col items-center gap-2 p-2 rounded-lg border transition-all ${sim.creationTemplate.presetType === p
-                          ? 'border-blue-500 bg-blue-500/10 text-white'
-                          : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
+                        key={m.id}
+                        onClick={() => { setAddMode(m.id as AddMode); setToolMode('add'); setActivePopUp(null); }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all ${addMode === m.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-white/5 hover:text-white'
                           }`}
                       >
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p === 'blackhole' ? 'black' : meta.color, border: '1px solid white' }} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">{p}</span>
+                        <span className="flex items-center gap-2">{m.icon} {m.label}</span>
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-                <div className="pt-2 border-t border-white/10 space-y-1">
-                  {[
-                    { id: 'orbit', label: 'Orbital Placement', icon: <MousePointerClick size={12} /> },
-                    { id: 'static', label: 'Static Deployment', icon: <CircleDot size={12} /> },
-                    { id: 'velocity', label: 'Kinetic Launch', icon: <FastForward size={12} /> }
-                  ].map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => { setAddMode(m.id as AddMode); setToolMode('add'); setActivePopUp(null); }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all ${addMode === m.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-white/5 hover:text-white'
-                        }`}
-                    >
-                      <span className="flex items-center gap-2">{m.icon} {m.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+              )}
 
-            {addMenuTab === 'system' && (
-              <div className="space-y-1">
-                {[
-                  { label: 'Solar System (Basic)', action: () => sim.loadSolarSystem() },
-                  { label: 'Solar System (1:1 Scale)', action: () => sim.loadRealScaleSolarSystem() },
-                  { label: 'Trisolar System', action: () => sim.loadTrisolarSystem() },
-                  { label: 'The Figure-8', action: () => sim.loadFigure8() },
-                  { label: 'Asteroid Belt', action: () => sim.loadAsteroidBelt() },
-                  { label: 'Black Hole Binary', action: () => sim.loadBlackHoleSystem() }
-                ].map(sys => (
-                  <button
-                    key={sys.label}
-                    onClick={() => {
-                      sys.action();
-                      setToolMode('select');
-                      setActivePopUp(null);
-                      setLastAction(() => sys.action);
-                    }}
-                    className="w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
-                  >
-                    {sys.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {addMenuTab === 'simulation' && (
-              <div className="space-y-1">
-                {[
-                  { label: 'Meteor Shower', action: () => sim.loadMeteorShower() },
-                  { label: 'Auto-Orbit Mission', action: () => sim.loadOrbitMission() },
-                  { label: 'Artemis 2 Mission', action: () => sim.loadArtemis2Mission() },
-                  { label: 'Rocket on Earth', action: () => sim.loadRocketOnEarth() },
-                  { label: 'Black Hole Devour', action: () => sim.loadBlackHoleDevour(), red: true }
-                ].map(scenario => (
-                  <button
-                    key={scenario.label}
-                    onClick={() => {
-                      scenario.action();
-                      setToolMode('select');
-                      setActivePopUp(null);
-                      setLastAction(() => scenario.action);
-                      if (sim.currentScript) setShowAutopilot(true);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${scenario.red ? 'text-red-400 hover:bg-red-400/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                  >
-                    {scenario.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {addMenuTab === 'exoplanets' && (
-              <div className="space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type="text"
-                    placeholder="Search OEC (e.g. TRAPPIST, Kepler)..."
-                    value={oecSearch}
-                    onChange={(e) => setOecSearch(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50"
-                  />
-                </div>
-
-                <div className="flex gap-1">
-                  {(['all', 'multi', 'nearby'] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setOecFilter(f)}
-                      className={`flex-1 py-1 rounded text-[8px] font-bold uppercase tracking-widest transition-all ${oecFilter === f ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-500'}`}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-1" style={{ maxHeight: '400px' }}>
-                  {loadingOEC ? (
-                    <div className="py-20 flex flex-col items-center justify-center gap-3 opacity-50">
-                      <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <div className="text-[9px] font-bold tracking-[2px] uppercase">Retrieving Catalogue...</div>
-                    </div>
-                  ) : (
-                    oecSystems
-                      .filter(s => {
-                        if (oecSearch) return s.name.toLowerCase().includes(oecSearch.toLowerCase());
-                        if (oecFilter === 'multi') return s.planets.length > 3;
-                        if (oecFilter === 'nearby') return s.planets[0].distance < 20 && s.planets[0].distance > 0;
-                        return true;
-                      })
-                      .slice(0, 100)
-                      .map(sys => (
+              {addMenuTab === 'body' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['star', 'planet', 'moon', 'comet', 'blackhole'] as const).map(p => {
+                      const tempSim = new Simulation();
+                      tempSim.creationTemplate.presetType = p;
+                      const meta = tempSim.getBodyMetadataFromPreset();
+                      return (
                         <button
-                          key={sys.name}
+                          key={p}
                           onClick={() => {
-                            sim.loadOECSystem(sys);
-                            setActivePopUp(null);
-                            setLastAction(() => () => sim.loadOECSystem(sys));
+                            sim.creationTemplate.presetType = p;
+                            setCreationPreset({ ...creationPreset, colorType: p });
+                            if (p === 'star' || p === 'blackhole') setAddMode('static');
+                            else if (p === 'comet') setAddMode('velocity');
+                            else setAddMode('orbit');
                           }}
-                          className="w-full flex items-center justify-between bg-black/40 hover:bg-blue-900/10 border border-white/5 hover:border-blue-500/30 p-3 rounded-xl transition-all group"
+                          className={`flex flex-col items-center gap-2 p-2 rounded-lg border transition-all ${sim.creationTemplate.presetType === p
+                            ? 'border-blue-500 bg-blue-500/10 text-white'
+                            : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
+                            }`}
                         >
-                          <div className="text-left flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-all">
-                              {sys.planets.length > 1 ? <Layers size={14} /> : <Globe size={14} />}
-                            </div>
-                            <div>
-                              <div className="text-[11px] font-bold text-white group-hover:text-blue-400">{sys.name}</div>
-                              <div className="text-[9px] text-gray-500 mt-0.5">
-                                {sys.planets.length} Planets • {sys.star.mass.toFixed(2)} M☉ • {sys.planets[0].radius > 0 ? (sys.planets[0].radius * 11.2).toFixed(1) : '?'} R⊕ • {sys.planets[0].mass > 0 ? (sys.planets[0].mass * 317.8).toFixed(1) : '?'} M⊕
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p === 'blackhole' ? 'black' : meta.color, border: '1px solid white' }} />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">{p}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="pt-2 border-t border-white/10 space-y-1">
+                    {[
+                      { id: 'orbit', label: 'Orbital Placement', icon: <MousePointerClick size={12} /> },
+                      { id: 'static', label: 'Static Deployment', icon: <CircleDot size={12} /> },
+                      { id: 'velocity', label: 'Kinetic Launch', icon: <FastForward size={12} /> }
+                    ].map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => { setAddMode(m.id as AddMode); setToolMode('add'); setActivePopUp(null); }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all ${addMode === m.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-white/5 hover:text-white'
+                          }`}
+                      >
+                        <span className="flex items-center gap-2">{m.icon} {m.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {addMenuTab === 'system' && (
+                <div className="space-y-1">
+                  {[
+                    { label: 'Solar System (Basic)', action: () => sim.loadSolarSystem() },
+                    { label: 'Solar System (1:1 Scale)', action: () => sim.loadRealScaleSolarSystem() },
+                    { label: 'Trisolar System', action: () => sim.loadTrisolarSystem() },
+                    { label: 'The Figure-8', action: () => sim.loadFigure8() },
+                    { label: 'Asteroid Belt', action: () => sim.loadAsteroidBelt() },
+                    { label: 'Black Hole Binary', action: () => sim.loadBlackHoleSystem() }
+                  ].map(sys => (
+                    <button
+                      key={sys.label}
+                      onClick={() => {
+                        sys.action();
+                        setToolMode('select');
+                        setActivePopUp(null);
+                        setLastAction(() => sys.action);
+                      }}
+                      className="w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                    >
+                      {sys.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {addMenuTab === 'simulation' && (
+                <div className="space-y-1">
+                  {[
+                    { label: 'Meteor Shower', action: () => sim.loadMeteorShower() },
+                    { label: 'Auto-Orbit Mission', action: () => sim.loadOrbitMission() },
+                    { label: 'Artemis 2 Mission', action: () => sim.loadArtemis2Mission() },
+                    { label: 'Rocket on Earth', action: () => sim.loadRocketOnEarth() },
+                    { label: 'Black Hole Devour', action: () => sim.loadBlackHoleDevour(), red: true }
+                  ].map(scenario => (
+                    <button
+                      key={scenario.label}
+                      onClick={() => {
+                        scenario.action();
+                        setToolMode('select');
+                        setActivePopUp(null);
+                        setLastAction(() => scenario.action);
+                        if (sim.currentScript) setShowAutopilot(true);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${scenario.red ? 'text-red-400 hover:bg-red-400/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      {scenario.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {addMenuTab === 'exoplanets' && (
+                <div className="space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="Search OEC (e.g. TRAPPIST, Kepler)..."
+                      value={oecSearch}
+                      onChange={(e) => setOecSearch(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50"
+                    />
+                  </div>
+
+                  <div className="flex gap-1">
+                    {(['all', 'multi', 'nearby'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setOecFilter(f)}
+                        className={`flex-1 py-1 rounded text-[8px] font-bold uppercase tracking-widest transition-all ${oecFilter === f ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-500'}`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-1" style={{ maxHeight: '400px' }}>
+                    {loadingOEC ? (
+                      <div className="py-20 flex flex-col items-center justify-center gap-3 opacity-50">
+                        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="text-[9px] font-bold tracking-[2px] uppercase">Retrieving Catalogue...</div>
+                      </div>
+                    ) : (
+                      oecSystems
+                        .filter(s => {
+                          if (oecSearch) return s.name.toLowerCase().includes(oecSearch.toLowerCase());
+                          if (oecFilter === 'multi') return s.planets.length > 3;
+                          if (oecFilter === 'nearby') return s.planets[0].distance < 20 && s.planets[0].distance > 0;
+                          return true;
+                        })
+                        .slice(0, 100)
+                        .map(sys => (
+                          <button
+                            key={sys.name}
+                            onClick={() => {
+                              sim.loadOECSystem(sys);
+                              setActivePopUp(null);
+                              setLastAction(() => () => sim.loadOECSystem(sys));
+                            }}
+                            className="w-full flex items-center justify-between bg-black/40 hover:bg-blue-900/10 border border-white/5 hover:border-blue-500/30 p-3 rounded-xl transition-all group"
+                          >
+                            <div className="text-left flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                                {sys.planets.length > 1 ? <Layers size={14} /> : <Globe size={14} />}
+                              </div>
+                              <div>
+                                <div className="text-[11px] font-bold text-white group-hover:text-blue-400">{sys.name}</div>
+                                <div className="text-[9px] text-gray-500 mt-0.5">
+                                  {sys.planets.length} Planets • {sys.star.mass.toFixed(2)} M☉ • {sys.planets[0].radius > 0 ? (sys.planets[0].radius * 11.2).toFixed(1) : '?'} R⊕ • {sys.planets[0].mass > 0 ? (sys.planets[0].mass * 317.8).toFixed(1) : '?'} M⊕
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-[8px] text-blue-500 font-bold tracking-widest group-hover:translate-x-1 transition-transform">DEPLOY →</div>
-                            {sys.planets[0].distance > 0 && (
-                              <div className="text-[7px] text-gray-600 mt-1">{sys.planets[0].distance.toFixed(1)} pc</div>
-                            )}
-                          </div>
-                        </button>
-                      ))
-                  )}
-                </div>
+                            <div className="text-right">
+                              <div className="text-[8px] text-blue-500 font-bold tracking-widest group-hover:translate-x-1 transition-transform">DEPLOY →</div>
+                              {sys.planets[0].distance > 0 && (
+                                <div className="text-[7px] text-gray-600 mt-1">{sys.planets[0].distance.toFixed(1)} pc</div>
+                              )}
+                            </div>
+                          </button>
+                        ))
+                    )}
+                  </div>
 
-                <div className="p-2 bg-blue-500/5 rounded-xl border border-blue-500/10">
-                  <div className="text-[8px] text-blue-400/80 uppercase font-bold tracking-[2px] flex items-center gap-2">
-                    <Sun size={10} />
-                    Scientific Metadata
-                  </div>
-                  <div className="text-[8px] text-gray-500 mt-1 leading-relaxed">
-                    Showing {oecSystems.length} systems from OEC. Parameters are derived from RV/Transit data.
+                  <div className="p-2 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                    <div className="text-[8px] text-blue-400/80 uppercase font-bold tracking-[2px] flex items-center gap-2">
+                      <Sun size={10} />
+                      Scientific Metadata
+                    </div>
+                    <div className="text-[8px] text-gray-500 mt-1 leading-relaxed">
+                      Showing {oecSystems.length} systems from OEC. Parameters are derived from RV/Transit data.
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </motion.div>
         )}
 
@@ -692,16 +702,23 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className={`fixed bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl z-[60] flex flex-col gap-4 w-72`}
+            className={`fixed bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-[60] flex flex-col w-72 overflow-hidden will-change-transform`}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-1">
-              <div className="flex items-center gap-2">
-                <FastForward size={16} className="text-blue-400" />
-                <span className="text-[11px] font-bold uppercase tracking-widest text-white">Time Jump</span>
+            {/* Unified Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
+                <FastForward size={13} className="text-blue-400" />
+                <span>TEMPORAL JUMP</span>
               </div>
+              <button
+                onClick={() => setActivePopUp(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="p-4 flex flex-col gap-4">
               <div className="space-y-1.5">
                 <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Target Date</label>
                 <input
