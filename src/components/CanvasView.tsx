@@ -646,9 +646,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         sim.camera.x = iState.panStartCamera.x - dxScreen / sim.camera.zoom;
         sim.camera.y = iState.panStartCamera.y - dyScreen / sim.camera.zoom;
 
-        // Velocity tracking for momentum
-        const vx = (sx - iState.lastPanScreenPos.x) / sim.camera.zoom;
-        const vy = (sy - iState.lastPanScreenPos.y) / sim.camera.zoom;
+        // Velocity tracking for momentum (In Screen Pixels per frame)
+        const vx = sx - iState.lastPanScreenPos.x;
+        const vy = sy - iState.lastPanScreenPos.y;
 
         // Exponential smoothing for velocity tracking
         iState.panVelocity.x = iState.panVelocity.x * 0.7 + vx * 0.3;
@@ -707,9 +707,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
       if (iState.isPanning) {
         iState.isPanning = false;
-        // Check if velocity is high enough to trigger momentum
+        // Check if screen-space velocity is high enough to trigger momentum
         const speedSq = iState.panVelocity.x ** 2 + iState.panVelocity.y ** 2;
-        if (speedSq > 0.1) {
+        if (speedSq > 2.0) { // Fixed screen-pixel threshold
           iState.hasMomentum = true;
         }
       }
@@ -1063,22 +1063,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
         // Apply Momentum Pan
         const iState = interactionState.current;
-        if (
-          iState.hasMomentum &&
-          !iState.isPanning &&
-          !sim.camera.followingId
-        ) {
-          sim.camera.x -= iState.panVelocity.x;
-          sim.camera.y -= iState.panVelocity.y;
-
-          // Apply friction damping
-          iState.panVelocity.x *= 0.94;
-          iState.panVelocity.y *= 0.94;
-
-          if (
-            Math.abs(iState.panVelocity.x) < 0.01 &&
-            Math.abs(iState.panVelocity.y) < 0.01
-          ) {
+        // Pan momentum (Zoom-invariant)
+        if (iState.hasMomentum) {
+          sim.camera.x -= iState.panVelocity.x / sim.camera.zoom;
+          sim.camera.y -= iState.panVelocity.y / sim.camera.zoom;
+          iState.panVelocity.x *= 0.95;
+          iState.panVelocity.y *= 0.95;
+          if (iState.panVelocity.x ** 2 + iState.panVelocity.y ** 2 < 0.01) {
             iState.hasMomentum = false;
             iState.panVelocity = { x: 0, y: 0 };
           }
