@@ -417,7 +417,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             exit={{ opacity: 0, y: 10 }}
             className="fixed bg-[#0c1016]/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-4 flex flex-col gap-4 z-[100] w-[500px] will-change-transform"
           >
-            <div className="flex bg-white/5 p-1 rounded-lg gap-1 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setActivePopUp(null)}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors z-10"
+            >
+              <X size={16} />
+            </button>
+            <div className="flex bg-white/5 p-1 rounded-lg gap-1 mr-10 overflow-x-auto no-scrollbar">
               {(['body', 'vehicle', 'system', 'simulation', 'exoplanets'] as const).map(tab => (
                 <button
                   key={tab}
@@ -776,7 +782,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
                 <button
                   onClick={() => setActivePopUp(null)}
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
                 >
                   <X size={16} />
                 </button>

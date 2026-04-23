@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import { Simulation, generateId } from '../lib/Simulation';
-import { Sparkles, Loader2, Send, ChevronDown } from 'lucide-react';
+import { Sparkles, Loader2, Send, ChevronDown, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import FC_API_DOC from '../../FLIGHT_CONTROL_API.md?raw';
 
@@ -501,9 +501,9 @@ ${FC_API_DOC}
               </div>
               <button
                 onClick={onClose}
-                className="text-gray-600 hover:text-gray-400 transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
               >
-                <ChevronDown size={16} />
+                <X size={16} />
               </button>
             </div>
 
