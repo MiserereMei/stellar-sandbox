@@ -87,12 +87,14 @@ export const StreamingHUD: React.FC<StreamingHUDProps> = ({ sim, isStreaming, au
   // (Note: I'll only replace the parts I need to)
 
   // Display time logic:
-  const launchTarget = sim.targetLaunchTime;
-  const launchEpoch = sim.launchEpoch;
-  const isCountdown = launchTarget !== null && sim.missionTime < launchTarget;
-  const displayTime = launchTarget !== null
+  const v = sim.vehicle as any;
+  const launchTarget = v?.targetLaunchTime;
+  const launchEpoch = v?.launchEpoch;
+  const isCountdown = launchTarget !== null && launchTarget !== undefined && sim.missionTime < launchTarget;
+  
+  const displayTime = (launchTarget !== null && launchTarget !== undefined)
     ? sim.missionTime - launchTarget
-    : launchEpoch !== null
+    : (launchEpoch !== null && launchEpoch !== undefined)
       ? sim.missionTime - launchEpoch
       : sim.missionTime;
 

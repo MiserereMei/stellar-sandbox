@@ -5,7 +5,7 @@ import { ToolMode, AddMode, BodyPreset, VisualSettings, ActivePopUp, EngineSetti
 import { AIChat } from './AIChat';
 import { catalogue, PlanetarySystem } from '../lib/CatalogueService';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Globe, Sun, Layers, X } from 'lucide-react';
+import { Search, Globe, Sun, Layers, X, Volume2 } from 'lucide-react';
 
 interface ToolbarProps {
   sim: Simulation;
@@ -41,7 +41,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [timeUnit, setTimeUnit] = useState<number>(1);
   const [inputValue, setInputValue] = useState<string>("1");
   const [addMenuTab, setAddMenuTab] = useState<'body' | 'vehicle' | 'system' | 'simulation' | 'exoplanets'>('body');
-  const [settingsTab, setSettingsTab] = useState<'visual' | 'streaming' | 'ai' | 'engine'>('visual');
+  const [settingsTab, setSettingsTab] = useState<'visual' | 'audio' | 'streaming' | 'ai' | 'engine'>('visual');
   const [anchors, setAnchors] = useState<Record<string, { left: number, top: number }>>({});
   const [displayZoom, setDisplayZoom] = useState(sim.camera.zoom);
   const dateRef = React.useRef<HTMLSpanElement>(null);
@@ -593,6 +593,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     { label: 'Meteor Shower', action: () => sim.loadMeteorShower() },
                     { label: 'Auto-Orbit Mission', action: () => sim.loadOrbitMission() },
                     { label: 'Artemis 2 Mission', action: () => sim.loadArtemis2Mission() },
+                    { label: 'Rocket Fleet (12x)', action: () => (sim as any).loadFleetLaunch(sim.currentScript) },
                     { label: 'Rocket on Earth', action: () => sim.loadRocketOnEarth() },
                     { label: 'Deep Impact (Crash Test)', action: () => (sim as any).loadDeepImpactScenario() },
                     { label: 'Black Hole Devour', action: () => sim.loadBlackHoleDevour(), red: true }
@@ -827,6 +828,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <div className="w-[200px] border-r border-white/10 bg-black/20 p-2 flex flex-col gap-1">
                   {[
                     { id: 'visual', label: 'Visuals', icon: <Layers size={14} /> },
+                    { id: 'audio', label: 'Audio', icon: <Volume2 size={14} /> },
                     { id: 'streaming', label: 'Streaming', icon: <Globe size={14} /> },
                     { id: 'ai', label: 'Astro Copilot', icon: <Sparkles size={14} /> },
                     { id: 'engine', label: 'Engine Core', icon: <Settings size={14} /> }
@@ -864,6 +866,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             onChange={() => setVisualSettings({ ...visualSettings, [opt.id]: !(visualSettings as any)[opt.id] })}
                             className="w-4 h-4 rounded border-white/10 bg-black/50 text-blue-500 focus:ring-0"
                           />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {settingsTab === 'audio' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Audio & Voice Configuration</div>
+                      {[
+                        { id: 'ttsEnabled', label: 'Master TTS Voice Feedback', desc: 'Enable or disable autopilot vocal notifications.' },
+                        { id: 'ttsAdaptiveRate', label: 'Adaptive TTS Rate', desc: 'Sync voice speed with simulation time scale.' }
+                      ].map((opt) => (
+                        <label key={opt.id} className="flex flex-col gap-1 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 cursor-pointer transition-colors group">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] uppercase tracking-wide text-gray-300 group-hover:text-white font-medium">{opt.label}</span>
+                            <input
+                              type="checkbox"
+                              checked={(visualSettings as any)[opt.id]}
+                              onChange={() => setVisualSettings({ ...visualSettings, [opt.id]: !(visualSettings as any)[opt.id] })}
+                              className="w-4 h-4 rounded border-white/10 bg-black/50 text-blue-500 focus:ring-0"
+                            />
+                          </div>
+                          <span className="text-[9px] text-gray-500 leading-tight">{opt.desc}</span>
                         </label>
                       ))}
                     </div>

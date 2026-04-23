@@ -15,7 +15,9 @@ export class AutopilotSandbox {
         _events: {} as Record<string, Function[]>,
         on: (event: string, cb: Function) => {
           if (!fc._events[event]) fc._events[event] = [];
-          fc._events[event].push(cb);
+          if (!fc._events[event].includes(cb)) {
+            fc._events[event].push(cb);
+          }
         },
         getThrust: () => fc._state.thrust,
         getRotate: () => fc._state.rotate,
@@ -37,6 +39,7 @@ export class AutopilotSandbox {
 
         setThrust: (amount: number) => this.onCommand('setThrust', [amount]),
         setRotate: (amount: number) => this.onCommand('setRotate', [amount]),
+        setLaunchTime: (time: number) => this.onCommand('setLaunchTime', [time]),
         
         essentials: {
           setPitch: (amount: number) => this.onCommand('setPitch', [amount]),

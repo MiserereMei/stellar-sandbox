@@ -30,6 +30,10 @@ export class Simulation {
   maxSubsteps: number = 200;
   physicsPrecision: number = 0.01;
 
+  // Audio / TTS Settings
+  ttsEnabled: boolean = true;
+  ttsAdaptiveRate: boolean = true;
+
   // WASM Physics Core
   readonly wasmPhysics = new PhysicsWasm();
 
@@ -39,6 +43,63 @@ export class Simulation {
         console.info('[Simulation] WASM physics core loaded and active.');
       }
     });
+
+    const fleetScript = orbitScript;
+    this.loadFleetLaunch(fleetScript);
+  }
+
+  loadFleetLaunch(script: string) {
+    this.clear();
+    this.timeScale = 1;
+    this.G = 1.541e-6;
+
+    const earthId = generateId();
+    this.bodies.push({
+      id: earthId, name: 'Earth', mass: 1.0, radius: 1.0, color: 'hsl(210, 80%, 60%)',
+      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+    });
+
+    const rocketCount = 12;
+    this.creationTemplate = { presetType: 'rocket' };
+    const meta = this.getBodyMetadataFromPreset();
+    const surfaceAlt = 1.0 + meta.radius;
+
+    for (let i = 0; i < rocketCount; i++) {
+      const angle = (i * (360 / rocketCount)) * (Math.PI / 180);
+      const nx = Math.cos(angle - Math.PI / 2);
+      const ny = Math.sin(angle - Math.PI / 2);
+
+      // Only the first rocket gets TTS
+      const finalScript = i === 0 ? script : script.replace('const tts = true', 'const tts = false');
+
+      const r: any = {
+        id: generateId(),
+        name: `Artemis #${i + 1}`,
+        mass: meta.mass,
+        radius: meta.radius,
+        length: meta.length,
+        color: i === 0 ? '#ffffff' : `hsl(${(i * 30) % 360}, 70%, 70%)`,
+        position: { x: nx * surfaceAlt, y: ny * surfaceAlt },
+        velocity: { x: 0, y: 0 },
+        trail: [],
+        type: 'rocket',
+        rotation: angle - Math.PI / 2,
+        angularVelocity: 0,
+        thrustPower: meta.thrustPower,
+        maxKineticEnergy: meta.maxKineticEnergy,
+        parentBodyId: earthId,
+        relativeOffset: { x: nx * surfaceAlt, y: ny * surfaceAlt },
+        script: finalScript
+      };
+
+      this.bodies.push(r);
+      
+      // Start autopilot immediately for each rocket
+      this.startAutopilot(finalScript, r.id, () => {});
+    }
+
+    this.camera.followingId = this.bodies[1]?.id; // Follow the first rocket
+    this.camera.zoom = 100;
   }
   isJumping: boolean = false;
   jumpProgress: number = 0;
@@ -670,7 +731,7 @@ export class Simulation {
           v.autopilotLog(`MISSION SCHEDULED: T-0 at T+${args[0]}s`);
           break;
         case 'speak':
-          if (!('speechSynthesis' in window)) {
+          if (!this.ttsEnabled || !('speechSynthesis' in window)) {
             if (args[2]) args[2]();
             return;
           }
@@ -683,12 +744,16 @@ export class Simulation {
           const basePitch = options?.pitch ?? 1.0;
           const ts = Math.abs(this.timeScale);
 
-          // Scale rate linearly, clamp to Web Speech API limits [0.1, 10]
-          utter.rate = Math.max(0.1, Math.min(10, baseRate * ts));
-          // Keep pitch constant as per user preference
+          // Scale rate linearly if adaptive rate is enabled
+          if (this.ttsAdaptiveRate) {
+            utter.rate = Math.max(0.1, Math.min(10, baseRate * ts));
+          } else {
+            utter.rate = baseRate;
+          }
+          
           utter.pitch = basePitch;
-
           utter.volume = options?.volume ?? 1.0;
+
           if (args[2]) {
             utter.onend = () => args[2]();
             utter.onerror = () => args[2]();
@@ -1071,7 +1136,7 @@ export class Simulation {
           horizontalSpeed: this.getTangentialSpeed(v)
         };
 
-        if (v.targetLaunchTime !== null && v.targetLaunchTime !== undefined && this.missionTime >= v.targetLaunchTime) {
+        if (v.launchEpoch === undefined && v.targetLaunchTime !== null && v.targetLaunchTime !== undefined && this.missionTime >= v.targetLaunchTime) {
           v.launchEpoch = this.missionTime; 
           if (v.autopilotLog) v.autopilotLog(`T-0! Launch sequence initiated at T+${this.missionTime.toFixed(1)}s`);
           v.sandbox.launch(fcState);

@@ -8,6 +8,7 @@ import { AIChat } from './components/AIChat';
 import { AutopilotConsole } from './components/AutopilotConsole';
 import { StreamingHUD } from './components/StreamingHUD';
 import { Outliner } from './components/Outliner';
+import { VehicleFleetHUD } from './components/VehicleFleetHUD';
 import { AnimatePresence } from 'motion/react';
 import EditorWindow from './components/EditorWindow';
 
@@ -19,6 +20,8 @@ export type VisualSettings = {
   gridEnabled: boolean;
   starsEnabled: boolean;
   trailsEnabled: boolean;
+  ttsEnabled: boolean;
+  ttsAdaptiveRate: boolean;
 };
 export type EngineSettings = {
   wasmEnabled: boolean;
@@ -44,7 +47,15 @@ export default function App() {
     const saved = localStorage.getItem('stellar_visual_settings');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return {
+          warpEnabled: parsed.warpEnabled ?? true,
+          gridEnabled: parsed.gridEnabled ?? true,
+          starsEnabled: parsed.starsEnabled ?? true,
+          trailsEnabled: parsed.trailsEnabled ?? true,
+          ttsEnabled: parsed.ttsEnabled ?? true,
+          ttsAdaptiveRate: parsed.ttsAdaptiveRate ?? true,
+        };
       } catch (e) {
         console.error("Failed to parse visual settings", e);
       }
@@ -54,6 +65,8 @@ export default function App() {
       gridEnabled: true,
       starsEnabled: true,
       trailsEnabled: true,
+      ttsEnabled: true,
+      ttsAdaptiveRate: true,
     };
   });
 
@@ -82,7 +95,10 @@ export default function App() {
   // Save Visual Settings
   useEffect(() => {
     localStorage.setItem('stellar_visual_settings', JSON.stringify(visualSettings));
-  }, [visualSettings]);
+    // Sync TTS settings to simulation
+    (sim as any).ttsEnabled = visualSettings.ttsEnabled;
+    (sim as any).ttsAdaptiveRate = visualSettings.ttsAdaptiveRate;
+  }, [visualSettings, sim]);
   const [showOutliner, setShowOutliner] = useState(false);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('stellar_api_key') || '');
   const [streamingMode, setStreamingMode] = useState(false);
@@ -326,6 +342,7 @@ export default function App() {
 
         <TimeJumpOverlay sim={sim} />
         <StreamingHUD sim={sim} isStreaming={streamingMode} autopilotLogs={autopilotLogs} />
+        {!streamingMode && <VehicleFleetHUD sim={sim} />}
 
         {/* Toolbar & Sidebars — hidden in streaming mode */}
         {!streamingMode && (
