@@ -15,6 +15,7 @@ export interface Body {
 
 import { Vehicle } from './Vehicle';
 import { AutopilotSandbox } from './AutopilotSandbox';
+import { PhysicsWasm } from './PhysicsWasm';
 import orbitScript from '../scripts/autopilot/auto-orbit.js?raw';
 import artemisScript from '../scripts/autopilot/artemis-2.js?raw';
 
@@ -24,6 +25,21 @@ export class Simulation {
   G: number = 0.5;
   timeScale: number = 1.0;
   paused: boolean = false;
+
+  // Physics Precision Settings
+  maxSubsteps: number = 200;
+  physicsPrecision: number = 0.01;
+
+  // WASM Physics Core
+  readonly wasmPhysics = new PhysicsWasm();
+
+  constructor() {
+    this.wasmPhysics.load().then(() => {
+      if (this.wasmPhysics.ready) {
+        console.info('[Simulation] WASM physics core loaded and active.');
+      }
+    });
+  }
   isJumping: boolean = false;
   jumpProgress: number = 0;
   cancelJump: boolean = false;
@@ -880,16 +896,23 @@ export class Simulation {
     if (!this.paused) {
       const rawDt = dt * this.timeScale;
       const safeDt = isNaN(rawDt) ? 0 : Math.min(rawDt, 0.1 * Math.max(1, this.timeScale));
-      const desiredSubsteps = Math.ceil(Math.abs(safeDt) / 0.01);
-      const substeps = isNaN(desiredSubsteps) ? 1 : Math.max(1, Math.min(200, desiredSubsteps));
+      const desiredSubsteps = Math.ceil(Math.abs(safeDt) / this.physicsPrecision);
+      const substeps = isNaN(desiredSubsteps) ? 1 : Math.max(1, Math.min(this.maxSubsteps, desiredSubsteps));
       const stepDt = safeDt / substeps;
+
+      const vehicleIsAnchored = this.vehicle && (this.vehicle as any).parentBodyId;
+      const useWasm = this.wasmPhysics.active && !vehicleIsAnchored;
+
+      if (useWasm) this.wasmPhysics.upload(this.bodies as any[]);
 
       for (let step = 0; step < substeps; step++) {
         if (!this.paused) {
           this.missionTime += stepDt;
         }
-        this.stepPhysics(stepDt);
+        this.stepPhysics(stepDt, useWasm);
       }
+
+      if (useWasm) this.wasmPhysics.download(this.bodies as any[]);
 
       this.trailAccumulator += Math.abs(safeDt);
       if (this.trailAccumulator > 0.05 * Math.max(1, this.timeScale / 1000)) {
@@ -910,7 +933,7 @@ export class Simulation {
     }
   }
 
-  stepPhysics(stepDt: number) {
+  stepPhysics(stepDt: number, wasmActive: boolean = false) {
 
     // Autopilot Execution
     if (this.isAutopilotActive) {
@@ -1083,36 +1106,68 @@ export class Simulation {
       }
     }
 
-    // 1. Resolve Gravity & Forces (Global Frame for all bodies)
-    for (let i = 0; i < this.bodies.length; i++) {
-      const b1 = this.bodies[i];
-      // If rocket is parented (landed), it inherits motion and skip physics
-      if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) continue;
-
-      let ax = 0, ay = 0;
-      for (let j = 0; j < this.bodies.length; j++) {
-        if (i === j) continue;
-        const b2 = this.bodies[j];
-        const dx = b2.position.x - b1.position.x;
-        const dy = b2.position.y - b1.position.y;
-        const distSq = dx * dx + dy * dy;
-        const dist = Math.sqrt(distSq);
-        if (dist === 0) continue;
-        const isB2BH = this.isBodyBlackHole(b2);
-        const softening = Math.max(b1.radius, b2.radius);
-        let potentialDist = Math.max(dist, softening * 0.1);
-        if (isB2BH) potentialDist = Math.max(0.2, dist - b2.radius);
-        const force = this.G * b2.mass / (potentialDist * potentialDist);
-        ax += force * (dx / dist);
-        ay += force * (dy / dist);
+    // 1. Resolve Gravity & Forces + Position Integration
+    //    Prefer WASM core; fall back to JS if not active or vehicle is anchored.
+    let wasmUsed = false;
+    if (wasmActive) {
+      // Find vehicle index for targeted sync
+      const vIdx = this.vehicle ? this.bodies.indexOf(this.vehicle) : -1;
+      
+      // OPTIMIZATION: If vehicle is thrusting, we MUST update its velocity in WASM memory 
+      // before the next step, because the thrust was calculated in JS above.
+      if (vIdx !== -1 && this.vehicle) {
+        // We reuse the WASM buffer pointer and stride
+        const ptr = this.wasmPhysics.getBufferPtr();
+        const mem = (this.wasmPhysics as any).wasmMemory.buffer;
+        const view = new Float64Array(mem, ptr + (vIdx * 7 * 8), 4);
+        view[0] = this.vehicle.position.x;
+        view[1] = this.vehicle.position.y;
+        view[2] = this.vehicle.velocity.x;
+        view[3] = this.vehicle.velocity.y;
       }
-      b1.velocity.x += ax * stepDt;
-      b1.velocity.y += ay * stepDt;
-      const speedSq = b1.velocity.x * b1.velocity.x + b1.velocity.y * b1.velocity.y;
-      if (speedSq > this.C * this.C) {
-        const speed = Math.sqrt(speedSq);
-        b1.velocity.x = (b1.velocity.x / speed) * this.C;
-        b1.velocity.y = (b1.velocity.y / speed) * this.C;
+
+      this.wasmPhysics.execute(stepDt, this.G, this.C);
+
+      // CRITICAL: Sync only the vehicle back to JS so the autopilot in the NEXT substep 
+      // knows where we actually are.
+      if (vIdx !== -1 && this.vehicle) {
+        this.wasmPhysics.downloadSingleBody(vIdx, this.vehicle as any);
+      }
+      
+      wasmUsed = true;
+    }
+
+    if (!wasmUsed) {
+      // --- JS fallback: gravity ---
+      for (let i = 0; i < this.bodies.length; i++) {
+        const b1 = this.bodies[i];
+        if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) continue;
+
+        let ax = 0, ay = 0;
+        for (let j = 0; j < this.bodies.length; j++) {
+          if (i === j) continue;
+          const b2 = this.bodies[j];
+          const dx = b2.position.x - b1.position.x;
+          const dy = b2.position.y - b1.position.y;
+          const distSq = dx * dx + dy * dy;
+          const dist = Math.sqrt(distSq);
+          if (dist === 0) continue;
+          const isB2BH = this.isBodyBlackHole(b2);
+          const softening = Math.max(b1.radius, b2.radius);
+          let potentialDist = Math.max(dist, softening * 0.1);
+          if (isB2BH) potentialDist = Math.max(0.2, dist - b2.radius);
+          const force = this.G * b2.mass / (potentialDist * potentialDist);
+          ax += force * (dx / dist);
+          ay += force * (dy / dist);
+        }
+        b1.velocity.x += ax * stepDt;
+        b1.velocity.y += ay * stepDt;
+        const speedSq = b1.velocity.x * b1.velocity.x + b1.velocity.y * b1.velocity.y;
+        if (speedSq > this.C * this.C) {
+          const speed = Math.sqrt(speedSq);
+          b1.velocity.x = (b1.velocity.x / speed) * this.C;
+          b1.velocity.y = (b1.velocity.y / speed) * this.C;
+        }
       }
     }
     for (let i = 0; i < this.bodies.length; i++) {
@@ -1120,6 +1175,7 @@ export class Simulation {
 
       // Position Update
       if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) {
+        // Anchored vehicle: always track parent position in JS
         const parent = this.bodies.find(b => b.id === (this.vehicle as any).parentBodyId);
         if (parent) {
           b1.position.x = parent.position.x + (this.vehicle as any).relativeOffset.x;
@@ -1128,10 +1184,13 @@ export class Simulation {
           b1.velocity.y = parent.velocity.y;
         } else {
           (this.vehicle as any).parentBodyId = null;
-          b1.position.x += b1.velocity.x * stepDt;
-          b1.position.y += b1.velocity.y * stepDt;
+          if (!wasmUsed) {
+            b1.position.x += b1.velocity.x * stepDt;
+            b1.position.y += b1.velocity.y * stepDt;
+          }
         }
-      } else {
+      } else if (!wasmUsed) {
+        // Free body: only integrate if WASM didn't already do it
         b1.position.x += b1.velocity.x * stepDt;
         b1.position.y += b1.velocity.y * stepDt;
       }

@@ -1,0 +1,23 @@
+{
+  "targets": {
+    "release": {
+      "outFile": "public/physics.wasm",
+      "textFile": "wasm-src/physics.wat",
+      "sourceMap": false,
+      "optimize": true,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": false,
+      "noAssert": false
+    },
+    "debug": {
+      "outFile": "public/physics.debug.wasm",
+      "textFile": "wasm-src/physics.debug.wat",
+      "sourceMap": true,
+      "debug": true
+    }
+  },
+  "options": {
+    "bindings": "raw"
+  }
+}
