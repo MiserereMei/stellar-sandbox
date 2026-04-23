@@ -231,6 +231,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     lastReactHoveredRocketId: null,
     previewRotation: -Math.PI / 2,
     lastMouseScreenPos: { x: 0, y: 0 },
+    zoomVelocity: 1,
   });
 
   // Sync selectedBodyId back to sim so drawing knows
@@ -257,7 +258,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         containerRef.current?.clientWidth || 800,
         containerRef.current?.clientHeight || 600
       );
-      
+
       if (addMode === "orbit" && !iState.orbitParentId) {
         sim.previewBody = null;
       } else {
@@ -296,6 +297,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         container.clientWidth,
         container.clientHeight,
       );
+
+      // Stop all momentum on interaction
+      iState.hasMomentum = false;
+      iState.zoomVelocity = 1;
 
       sim.mouseWorldPos = wx;
 
@@ -407,9 +412,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               parentBodyId: parentBody ? parentBody.id : null,
               relativeOffset: parentBody
                 ? {
-                    x: newBody.position.x - parentBody.position.x,
-                    y: newBody.position.y - parentBody.position.y,
-                  }
+                  x: newBody.position.x - parentBody.position.x,
+                  y: newBody.position.y - parentBody.position.y,
+                }
                 : null,
               type: sim.creationTemplate.presetType as any,
               rotation: spawnRotation,
@@ -525,6 +530,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       );
       const iState = interactionState.current;
 
+      // Stop all momentum on any pointer move
+      iState.hasMomentum = false;
+      iState.zoomVelocity = 1;
+
       iState.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       // Handle pinch zoom init
@@ -550,7 +559,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       for (let i = sim.bodies.length - 1; i >= 0; i--) {
         const b = sim.bodies[i];
         let thresholdSq = Math.max(b.radius, 10 / sim.camera.zoom) ** 2;
-        
+
         // Hysteresis: if this is the currently hovered rocket, give it a larger hit area (e.g. 150px)
         // so the user can move the mouse up to the floating menu without it disappearing.
         if (b.id === iState.lastReactHoveredRocketId) {
@@ -569,7 +578,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       const hoveredBody = hoveredId ? sim.bodies.find(b => b.id === hoveredId) : null;
       const isRocket = hoveredBody && ((hoveredBody as any).type === 'rocket' || (hoveredBody as any).type === 'heatProtectedRocket');
       const finalRocketId = isRocket ? hoveredId : null;
-      
+
       if (iState.lastReactHoveredRocketId !== finalRocketId) {
         iState.lastReactHoveredRocketId = finalRocketId;
         setHoveredRocketId(finalRocketId);
@@ -781,7 +790,25 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
 
-      // 1. Capture world point under mouse before zoom
+      // Stop all momentum on wheel/scroll start
+      iState.hasMomentum = false;
+      iState.zoomVelocity = 1;
+
+      // Trackpad Detection Logic
+      const isTouchPad = (e as any).wheelDeltaY ? (e as any).wheelDeltaY === -3 * e.deltaY : e.deltaMode === 0;
+
+      // 1. Handle Pan if it's a trackpad and not pinching (ctrlKey is often used for trackpad pinch zoom)
+      if (isTouchPad && !e.ctrlKey) {
+        sim.camera.followingId = null;
+        sim.camera.x += e.deltaX / sim.camera.zoom;
+        sim.camera.y += e.deltaY / sim.camera.zoom;
+
+        // Sync mouse world pos after pan
+        sim.mouseWorldPos = sim.screenToWorld(sx, sy, container.clientWidth, container.clientHeight);
+        return;
+      }
+
+      // 2. Handle Zoom (Mouse wheel or Trackpad with Ctrl)
       const worldMouseBefore = sim.screenToWorld(
         sx,
         sy,
@@ -789,22 +816,37 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         container.clientHeight,
       );
 
+      // Block browser pinch-to-zoom at the element level too
+      if (e.ctrlKey) {
+        e.preventDefault();
+      }
+
       if (toolMode === "add") {
         // Rotate preview instead of zooming
         const isRocket = sim.creationTemplate.presetType === 'rocket' || sim.creationTemplate.presetType === 'heatProtectedRocket';
         if (isRocket) {
-          const rotationStep = 0.1;
           iState.previewRotation += e.deltaY * 0.001;
           return;
         }
       }
 
-      const zoomSpeed = 0.001;
+      // Distinguish between Trackpad/Magic Mouse (continuous) and Clicky Mouse (discrete)
+      const isContinuous = Math.abs(e.deltaY) % 1 !== 0 || Math.abs(e.deltaY) < 50;
+
+      // Amplify zoom speed ONLY for continuous pinch (Trackpad)
+      const zoomAmplify = (e.ctrlKey && isContinuous) ? 10.0 : 1.0;
+      const zoomSpeed = 0.001 * zoomAmplify;
       const oldZoom = sim.camera.zoom;
-      let newZoom = oldZoom * Math.exp(-e.deltaY * zoomSpeed);
+      const zoomFactor = Math.exp(-e.deltaY * zoomSpeed);
+      let newZoom = oldZoom * zoomFactor;
       newZoom = Math.max(1e-15, Math.min(newZoom, 1e15));
-      
+
       sim.camera.zoom = newZoom;
+
+      // Enable zoom momentum for Brave/Chrome (which use wheel + ctrlKey for pinch)
+      if (e.ctrlKey) {
+        iState.zoomVelocity = iState.zoomVelocity * 0.5 + zoomFactor * 0.5;
+      }
 
       if (!sim.camera.followingId) {
         sim.camera.x = worldMouseBefore.x - (sx - container.clientWidth / 2) / newZoom;
@@ -856,7 +898,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           break;
         }
       }
-      
+
       if (clickedBody) {
         sim.camera.followingId = clickedBody.id;
       }
@@ -909,6 +951,22 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       if (e.key.toLowerCase() === "d") v.rotatingRight = false;
     };
 
+    // Global prevention of browser pinch-to-zoom
+    const preventBrowserZoom = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+      }
+    };
+
+    const preventTouchZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener("wheel", preventBrowserZoom, { passive: false });
+    window.addEventListener("touchstart", preventTouchZoom, { passive: false });
+
     container.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("pointermove", onPointerMove);
     container.addEventListener("dblclick", onDblClick);
@@ -916,7 +974,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     window.addEventListener("pointercancel", onPointerUp);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    container.addEventListener("wheel", onWheel, { passive: true });
+    container.addEventListener("wheel", onWheel, { passive: false });
     container.addEventListener("contextmenu", (e) => e.preventDefault());
 
     return () => {
@@ -929,6 +987,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       window.removeEventListener("keyup", onKeyUp);
       container.removeEventListener("wheel", onWheel);
       container.removeEventListener("contextmenu", (e) => e.preventDefault());
+      window.removeEventListener("wheel", preventBrowserZoom);
+      window.removeEventListener("touchstart", preventTouchZoom);
     };
   }, [sim, toolMode, addMode, creationPreset, onSelectBody]);
 
@@ -1075,6 +1135,31 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           }
         }
 
+        // Zoom momentum (Damped drifting after pinch release)
+        if (Math.abs(iState.zoomVelocity - 1) > 0.0001) {
+          const sx = iState.lastMouseScreenPos.x;
+          const sy = iState.lastMouseScreenPos.y;
+
+          // 1. Capture world position BEFORE zoom update
+          const worldMouseBefore = sim.screenToWorld(sx, sy, container.clientWidth, container.clientHeight);
+
+          const oldZoom = sim.camera.zoom;
+          const newZoom = Math.max(1e-15, Math.min(oldZoom * iState.zoomVelocity, 1e15));
+          sim.camera.zoom = newZoom;
+
+          // 2. Anchor the drift to the world position captured before zoom
+          if (!sim.camera.followingId) {
+            sim.camera.x = worldMouseBefore.x - (sx - container.clientWidth / 2) / newZoom;
+            sim.camera.y = worldMouseBefore.y - (sy - container.clientHeight / 2) / newZoom;
+          }
+
+          // Damping (Faster decay)
+          iState.zoomVelocity = 1 + (iState.zoomVelocity - 1) * 0.85;
+          if (Math.abs(iState.zoomVelocity - 1) < 0.0001) {
+            iState.zoomVelocity = 1;
+          }
+        }
+
         // Logical pixels (CSS dimensions)
         const width = container.clientWidth;
         const height = container.clientHeight;
@@ -1132,24 +1217,24 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             cx += (Math.random() - 0.5) * intensity / zoom;
             cy += (Math.random() - 0.5) * intensity / zoom;
           }
-          
+
           // Offset
           if (sim.cinematicCamera.offsetX !== 0 || sim.cinematicCamera.offsetY !== 0) {
             cx -= (sim.cinematicCamera.offsetX * width / 2) / zoom;
             cy -= (sim.cinematicCamera.offsetY * height / 2) / zoom;
           }
-          
+
           // Zoom Scale
           if (sim.cinematicCamera.zoomScale > 0 && sim.camera.followingId) {
-             const target = sim.bodies.find(b => b.id === sim.camera.followingId);
-             if (target) {
-                // Determine screen's shortest dimension
-                const minDim = Math.min(width, height);
-                // zoomScale is fraction of screen the object diameter should cover
-                const desiredDiameterPixels = minDim * sim.cinematicCamera.zoomScale;
-                const objectDiameterUnits = Math.max(target.radius, 0.0001) * 2;
-                zoom = desiredDiameterPixels / objectDiameterUnits;
-             }
+            const target = sim.bodies.find(b => b.id === sim.camera.followingId);
+            if (target) {
+              // Determine screen's shortest dimension
+              const minDim = Math.min(width, height);
+              // zoomScale is fraction of screen the object diameter should cover
+              const desiredDiameterPixels = minDim * sim.cinematicCamera.zoomScale;
+              const objectDiameterUnits = Math.max(target.radius, 0.0001) * 2;
+              zoom = desiredDiameterPixels / objectDiameterUnits;
+            }
           }
         }
 
@@ -1171,7 +1256,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         for (let p = basePower - 6; p <= basePower + 6; p++) {
           const worldGridStep = Math.pow(10, p / 10);
           const screenGridSize = worldGridStep * zoom;
-          
+
           // Wider Gaussian Fade (Sigma 2.2) for silkier transitions
           const dist = Math.abs(logStep - p);
           const sigma = 2.2;
@@ -1180,7 +1265,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           if (alpha > 0.01 && screenGridSize > 1) {
             let offsetX = (width / 2 - cx * zoom) % screenGridSize;
             let offsetY = (height / 2 - cy * zoom) % screenGridSize;
-            
+
             if (offsetX < 0) offsetX += screenGridSize;
             if (offsetY < 0) offsetY += screenGridSize;
 
@@ -1194,11 +1279,11 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               for (let y = offsetY - screenGridSize; y < height + screenGridSize; y += screenGridSize) {
                 const cellIdX = startIdX + ix;
                 const cellIdY = startIdY + iy;
-                
+
                 // Stable random offsets within the cell
                 const rx = hash(cellIdX, cellIdY, p);
                 const ry = hash(cellIdX, cellIdY, p + 10);
-                
+
                 const sx = x + rx * screenGridSize;
                 const sy = y + ry * screenGridSize;
 
@@ -1209,7 +1294,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                   let color = 0xffffff;
                   if (shift < 0) color = 0xe0f0ff;      // Blueshift (Cool/New)
                   else if (shift > 0) color = 0xffe0d0; // Redshift (Warm/Old)
-                  
+
                   // Asymmetric Thinning: 
                   // Coarse layers (p > logStep) just fade out at full size during zoom-in.
                   // Fine layers (p < logStep) thin out as they fade during zoom-out.
@@ -1226,7 +1311,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
         // Shepard Tone Logarithmic Grid (Restore standard 10^p hierarchy)
         gridGraphics.clear();
-        
+
         const gridLogStep = Math.log10(75 / zoom);
         const gridBasePower = Math.floor(gridLogStep);
 
@@ -1234,17 +1319,17 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         for (let p = gridBasePower - 1; p <= gridBasePower + 2; p++) {
           const worldGridStep = Math.pow(10, p);
           const screenGridSize = worldGridStep * zoom;
-          
-          const dist = gridLogStep - p; 
+
+          const dist = gridLogStep - p;
           let alpha = 0.02;
 
           if (dist <= 0) {
             // Older/Persistent layers stay at stable alpha
-            alpha = 0.08; 
+            alpha = 0.08;
           } else if (dist < 0.2) {
             // Ultra-Fast Birth: Very tight range (0.2) and sqrt curve for near-instant pop-in
             const t = 1 - (dist / 0.2); // 0 to 1
-            const smoothT = Math.pow(t, 0.5); 
+            const smoothT = Math.pow(t, 0.5);
             alpha = 0.02 + (smoothT * 0.06);
           }
 
@@ -1258,7 +1343,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             for (let y = offsetYGrid; y < height; y += screenGridSize) {
               gridGraphics.moveTo(0, y).lineTo(width, y);
             }
-            
+
             const strokeWidth = p > gridLogStep ? 1.5 : 1.0;
             gridGraphics.stroke({ width: strokeWidth, color: "#ffffff", alpha: alpha });
           }
@@ -1340,7 +1425,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             const len = b.projectedTrail.length;
             const refId = (b as any).projectedTrailReferenceId;
             const refBody = refId ? sim.bodies.find(rb => rb.id === refId) : null;
-            
+
             // Base offset (either the reference body or absolute origin)
             const baseX = refBody ? refBody.position.x : 0;
             const baseY = refBody ? refBody.position.y : 0;
@@ -1351,7 +1436,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             for (let i = 0; i < len; i++) {
               const px = (baseX + b.projectedTrail[i].x - cx) * zoom;
               const py = (baseY + b.projectedTrail[i].y - cy) * zoom;
-              
+
               if (drawing) {
                 targetTrailsGraphics.lineTo(px, py);
               } else {
@@ -1416,7 +1501,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             if (isRocketType) {
               const v = b as any;
               const l_px = Math.max((v as any).length || b.radius * 2, 6 / zoom) * zoom;
-              const r_px = l_px / 2; 
+              const r_px = l_px / 2;
 
               const rot = v.rotation;
               const cos = Math.cos(rot);
@@ -1727,29 +1812,29 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           };
 
           if ((exp as any).isSupernova) {
-             // 1. Outer Nebula (Subtle Organic Wobble)
-             // Using exp.seed for unique patterns
-             drawTurbulence(screenRadius, 40, 0.03, "#7c3aed", alpha * 0.1, exp.seed);
-             drawTurbulence(screenRadius * 0.8, 35, 0.02, "#6d28d9", alpha * 0.15, exp.seed + 123);
-             
-             // 2. Cyan Plasma core (Minimal wobble)
-             drawTurbulence(screenRadius * 0.6, 30, 0.015, "#22d3ee", alpha * 0.25, exp.seed + 456);
-             
-             // 3. Intense White Core
-             explosionsGraphics.circle(sx, sy, screenRadius * (0.25 + (1-progress)*0.2)).fill({ color: "#ffffff", alpha: alpha * 0.9 });
+            // 1. Outer Nebula (Subtle Organic Wobble)
+            // Using exp.seed for unique patterns
+            drawTurbulence(screenRadius, 40, 0.03, "#7c3aed", alpha * 0.1, exp.seed);
+            drawTurbulence(screenRadius * 0.8, 35, 0.02, "#6d28d9", alpha * 0.15, exp.seed + 123);
 
-             // 4. Smooth Shockwaves
-             explosionsGraphics.circle(sx, sy, screenRadius * progress).stroke({ color: "#ffffff", width: 8, alpha: alpha * 0.15 });
+            // 2. Cyan Plasma core (Minimal wobble)
+            drawTurbulence(screenRadius * 0.6, 30, 0.015, "#22d3ee", alpha * 0.25, exp.seed + 456);
+
+            // 3. Intense White Core
+            explosionsGraphics.circle(sx, sy, screenRadius * (0.25 + (1 - progress) * 0.2)).fill({ color: "#ffffff", alpha: alpha * 0.9 });
+
+            // 4. Smooth Shockwaves
+            explosionsGraphics.circle(sx, sy, screenRadius * progress).stroke({ color: "#ffffff", width: 8, alpha: alpha * 0.15 });
           } else {
-             // REGULAR EXPLOSION (Minimal Organic Wobble)
-             drawTurbulence(screenRadius, 20, 0.04, "#ea580c", alpha * 0.3, exp.seed);
-             drawTurbulence(screenRadius * 0.7, 15, 0.03, "#f97316", alpha * 0.4, exp.seed + 789);
-             
-             // White-hot center
-             explosionsGraphics.circle(sx, sy, screenRadius * 0.3).fill({ color: "#ffffff", alpha: alpha * 0.8 });
+            // REGULAR EXPLOSION (Minimal Organic Wobble)
+            drawTurbulence(screenRadius, 20, 0.04, "#ea580c", alpha * 0.3, exp.seed);
+            drawTurbulence(screenRadius * 0.7, 15, 0.03, "#f97316", alpha * 0.4, exp.seed + 789);
 
-             // Sharp shockwave
-             explosionsGraphics.circle(sx, sy, screenRadius * Math.pow(progress, 0.3)).stroke({ color: "#ffffff", width: 2, alpha: alpha * 0.4 });
+            // White-hot center
+            explosionsGraphics.circle(sx, sy, screenRadius * 0.3).fill({ color: "#ffffff", alpha: alpha * 0.8 });
+
+            // Sharp shockwave
+            explosionsGraphics.circle(sx, sy, screenRadius * Math.pow(progress, 0.3)).stroke({ color: "#ffffff", width: 2, alpha: alpha * 0.4 });
           }
         }
 
@@ -1829,7 +1914,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           uiGraphics
             .circle((start.x - cx) * zoom, (start.y - cy) * zoom, 4)
             .fill({ color: "#facc15" });
-          
+
           uiGraphics
             .circle((end.x - cx) * zoom, (end.y - cy) * zoom, 4)
             .fill({ color: "#facc15" });
@@ -1857,9 +1942,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           if (isVehicle) {
             const angle = Math.atan2(
               sim.previewVelocityVector.end.y -
-                sim.previewVelocityVector.start.y,
+              sim.previewVelocityVector.start.y,
               sim.previewVelocityVector.end.x -
-                sim.previewVelocityVector.start.x,
+              sim.previewVelocityVector.start.x,
             );
             const r = 4;
             const p1 = {
@@ -1938,7 +2023,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         for (const txt of textCache.values()) {
           try {
             txt.destroy();
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     };
@@ -1955,13 +2040,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         className="absolute inset-0 touch-none pointer-events-auto"
         style={{ touchAction: "none" }}
       />
-      
+
       {/* DOM Hover UI */}
       {hoveredRocketId && (() => {
         const b = sim.bodies.find(b => b.id === hoveredRocketId) as any;
         if (!b) return null;
         return (
-          <div 
+          <div
             id="hover-ui-rocket"
             className="absolute left-0 top-0 pointer-events-auto flex items-center bg-[#11141b]/90 backdrop-blur border border-white/20 shadow-2xl rounded-xl p-1.5 gap-1.5 z-50 transition-opacity duration-200"
             onMouseEnter={() => {
@@ -1974,7 +2059,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               setHoveredRocketId(null);
             }}
           >
-            <button 
+            <button
               onClick={() => {
                 if (b.isAutopilotActive) {
                   sim.stopAutopilot(b.id);
@@ -1998,7 +2083,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             >
               {b.isAutopilotActive ? <Square size={12} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
             </button>
-            <button 
+            <button
               onClick={() => {
                 window.open(`/?editor=${b.id}`, `Editor_${b.id}`, 'width=800,height=600,left=200,top=100');
               }}
