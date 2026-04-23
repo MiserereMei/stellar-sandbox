@@ -122,11 +122,12 @@ const TOOLS = [
   },
   {
     name: 'inject_autopilot_script',
-    description: 'Injects and runs a JavaScript autopilot script on the rocket vehicle. The script must define `function autopilotStep(t, fc) { ... }`.',
+    description: 'Injects and runs a JavaScript autopilot script on a specific rocket vehicle. Defaults to the primary vehicle if no name is provided.',
     parameters: {
       type: Type.OBJECT,
       properties: {
         script: { type: Type.STRING, description: 'Valid JavaScript autopilot script string.' },
+        bodyName: { type: Type.STRING, description: 'Optional: name of the vehicle to target (e.g. "Orion", "Artemis SLS").' },
       },
       required: ['script'],
     },
@@ -146,7 +147,7 @@ const TOOLS = [
 
 // ─── Tool Executor ────────────────────────────────────────────────────────────
 
-function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: string) => void): string {
+function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: string, targetId?: string) => void): string {
   try {
     switch (name) {
       case 'replace_all_bodies': {
@@ -288,8 +289,13 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
       }
 
       case 'inject_autopilot_script': {
-        if (onScript) onScript(args.script);
-        return 'Autopilot script injected.';
+        let targetId = (sim.vehicle || sim.bodies.find(b => (b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket'))?.id;
+        if (args.bodyName) {
+          const target = sim.bodies.find(b => b.name.toLowerCase().includes(args.bodyName.toLowerCase()));
+          if (target) targetId = target.id;
+        }
+        if (onScript) onScript(args.script, targetId);
+        return targetId ? 'Autopilot script injected to targeted vehicle.' : 'Autopilot script injected to primary vehicle.';
       }
 
       case 'set_camera': {
@@ -311,7 +317,7 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export const AIChat: React.FC<AIChatProps & { onInjectScript?: (s: string) => void }> = ({
+export const AIChat: React.FC<AIChatProps & { onInjectScript?: (s: string, targetId?: string) => void }> = ({
   sim, show, onClose, anchorRect, apiKey, onInjectScript, onSetApiKey
 }) => {
   const [input, setInput] = useState('');
@@ -391,6 +397,7 @@ BEHAVIOR RULES:
 - If the user says "in space" or "away from earth", do NOT include Earth or other massive bodies that would cause strong gravitational pull unless asked.
 - Use "load_vehicle" to place a rocket on a planet or in open space. To place in space, omit "bodyName" or set it to "space", and optionally provide "position"/"velocity".
 - Always check if a vehicle already exists in the "CURRENT SIMULATION STATE". If it does, you can just inject the script without reloading the vehicle unless asked.
+- To control a specific vehicle when multiple exist, provide the "bodyName" in the inject_autopilot_script tool.
 
 AVAILABLE PRESETS (use with load_preset tool):
 - solar_system: Classic Sun + planets orbiting system

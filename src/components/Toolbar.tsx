@@ -21,8 +21,6 @@ interface ToolbarProps {
   setVisualSettings: (settings: VisualSettings) => void;
   engineSettings: EngineSettings;
   setEngineSettings: (settings: EngineSettings) => void;
-  showAutopilot: boolean;
-  setShowAutopilot: (val: boolean) => void;
   showOutliner: boolean;
   setShowOutliner: (val: boolean) => void;
   streamingMode: boolean;
@@ -35,7 +33,7 @@ interface ToolbarProps {
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   sim, toolMode, setToolMode, addMode, setAddMode, creationPreset, setCreationPreset, activePopUp, setActivePopUp, visualSettings, setVisualSettings,
-  showAutopilot, setShowAutopilot, showOutliner, setShowOutliner, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction,
+  showOutliner, setShowOutliner, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction,
   engineSettings, setEngineSettings
 }) => {
   const [paused, setPaused] = useState(sim.paused);
@@ -275,15 +273,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <Layers size={18} />
             </DockButton>
 
-            {sim.vehicle && (
-              <DockButton
-                active={showAutopilot}
-                onClick={() => setShowAutopilot(!showAutopilot)}
-                title="Autopilot Terminal"
-              >
-                <Terminal size={18} className={showAutopilot ? 'animate-pulse' : ''} />
-              </DockButton>
-            )}
+
 
             <DockButton
               active={activePopUp === 'add'}
@@ -614,7 +604,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         setToolMode('select');
                         setActivePopUp(null);
                         setLastAction(() => scenario.action);
-                        if (sim.currentScript) setShowAutopilot(true);
+                        if (sim.currentScript) {
+                          // Start the script in background without showing the editor
+                          sim.startAutopilot(sim.currentScript, (sim.vehicle || sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket'))?.id, (msg) => {
+                             // Broadcast to logs if needed
+                             (window as any)._logBuffer = (window as any)._logBuffer || [];
+                             (window as any)._logBuffer.push({ time: sim.missionTime, msg });
+                          });
+                        }
                       }}
                       className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${scenario.red ? 'text-red-400 hover:bg-red-400/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                     >
@@ -1113,10 +1110,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         anchorRect={anchors.ai as any}
         apiKey={apiKey}
         onSetApiKey={setApiKey}
-        onInjectScript={(script) => {
+        onInjectScript={(script, targetId) => {
           sim.currentScript = script;
-          sim.startAutopilot(script, () => { });
-          setShowAutopilot(true);
+          const finalTargetId = targetId || (sim.vehicle || sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket'))?.id;
+          
+          sim.startAutopilot(script, finalTargetId, (msg) => {
+             (window as any)._logBuffer = (window as any)._logBuffer || [];
+             (window as any)._logBuffer.push({ time: sim.missionTime, msg });
+          });
         }}
       />
     </>

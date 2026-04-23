@@ -83,7 +83,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('stellar_visual_settings', JSON.stringify(visualSettings));
   }, [visualSettings]);
-  const [showAutopilot, setShowAutopilot] = useState(false);
   const [showOutliner, setShowOutliner] = useState(false);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('stellar_api_key') || '');
   const [streamingMode, setStreamingMode] = useState(false);
@@ -291,7 +290,6 @@ export default function App() {
 
   const onSelectBody = React.useCallback((id: string | null) => {
     setSelectedBodyId(id);
-    if (id) setShowAutopilot(false);
   }, []);
 
   const handleSetActivePopUp = React.useCallback((val: ActivePopUp) => {
@@ -346,11 +344,6 @@ export default function App() {
               setVisualSettings={setVisualSettings}
               engineSettings={engineSettings}
               setEngineSettings={setEngineSettings}
-              showAutopilot={showAutopilot}
-              setShowAutopilot={(val) => {
-                setShowAutopilot(val);
-                if (val) setSelectedBodyId(null);
-              }}
               showOutliner={showOutliner}
               setShowOutliner={setShowOutliner}
               streamingMode={streamingMode}
@@ -368,15 +361,6 @@ export default function App() {
                   sim={sim}
                   selectedBodyId={selectedBodyId}
                   onClose={() => setSelectedBodyId(null)}
-                />
-              ) : showAutopilot ? (
-                <AutopilotConsole
-                  key="autopilot"
-                  sim={sim}
-                  logs={autopilotLogs}
-                  onAddLog={addAutopilotLog}
-                  onClearLogs={clearAutopilotLogs}
-                  onClose={() => setShowAutopilot(false)}
                 />
               ) : null}
             </AnimatePresence>
