@@ -63,7 +63,7 @@ export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, o
     : launchEpoch !== null
       ? sim.missionTime - launchEpoch
       : sim.missionTime;
-  const formattedTime = Math.abs(displayTime < 0 ? Math.ceil(displayTime) : Math.floor(displayTime));
+  const formattedTime = displayTime < 0 ? Math.ceil(Math.abs(displayTime)) : Math.floor(Math.abs(displayTime));
 
   return (
     <motion.aside 
@@ -85,23 +85,25 @@ export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, o
                 <div className="text-[10px] uppercase tracking-[2px] text-gray-500 mb-1 font-bold">SYSTEM DATA // FLIGHT CONTROL</div>
                 <div className="flex items-center justify-between">
                   <div className="text-emerald-500 font-extrabold text-[12px] uppercase">Autopilot Terminal</div>
-                  <div className="flex items-center gap-2 mr-8">
-                    {isCountdown && (
-                      <button
-                        onClick={() => {
-                          const diff = sim.targetLaunchTime! - sim.missionTime;
-                          sim.missionTime += diff;
-                          onAddLog?.(`Time warp: Skipped ${diff.toFixed(1)}s to T-0`);
-                        }}
-                        className="text-[8px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded hover:bg-orange-500/30 transition-colors uppercase font-bold tracking-wider whitespace-nowrap"
-                      >
-                        Launch Now
-                      </button>
-                    )}
-                    <div className="text-[11px] text-blue-400 font-mono bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                      T{displayTime < 0 ? '-' : '+'}{formattedTime}s
+                  {isRunning && (
+                    <div className="flex items-center gap-2 mr-8">
+                      {isCountdown && (
+                        <button
+                          onClick={() => {
+                            const diff = sim.targetLaunchTime! - sim.missionTime;
+                            sim.missionTime += diff;
+                            onAddLog?.(`Time warp: Skipped ${diff.toFixed(1)}s to T-0`);
+                          }}
+                          className="text-[8px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded hover:bg-orange-500/30 transition-colors uppercase font-bold tracking-wider whitespace-nowrap"
+                        >
+                          Launch Now
+                        </button>
+                      )}
+                      <div className="text-[11px] text-blue-400 font-mono bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                        T{displayTime < 0 ? '-' : '+'}{formattedTime}s
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
             </div>
 

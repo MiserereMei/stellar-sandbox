@@ -51,11 +51,33 @@ interface CelestialBody {
 }
 ```
 
-## Mission Control & Sequencing
+## Lifecycle Events
+
+The system uses a single primary event listener for flight logic.
+
+| Event | Callback Signature | Description |
+| :--- | :--- | :--- |
+| `"step"` | `(t, fc) => {}` | Fires every physics frame (~60Hz). This is where all sensors are read and actuators are set. |
+
+### Example
+```javascript
+fc.on("step", (t, fc) => {
+    // 1. Read Sensors
+    const alt = fc.getAltitude();
+    
+    // 2. Logic
+    if (alt > 0.1) fc.setThrust(1.0);
+    
+    // 3. Actuators
+    fc.setRotate(0.1);
+});
+```
+
+## Mission Control & UI
 
 | Method | Description | Units |
 | :--- | :--- | :--- |
-| `fc.setLaunchTime(startTime)` | Schedules a T-0 launch sequence. HUD counts down and calls `onLaunch(fc)` exactly at T-0. | Seconds |
+| `fc.setLaunchTime(seconds)` | Schedules a UI countdown (T-minus). Does NOT trigger an event; use `t` in the step loop to sync your logic. | Seconds |
 | `fc.igniteBooster(thrust, burnTime, onBurnout)` | Fires solid rocket boosters (SRBs) adding raw physical force. `onBurnout(fc)` is triggered when fuel runs out. | Newtons, Seconds |
 
 ## Cinematic Camera (Streaming Mode)
@@ -73,29 +95,11 @@ interface CelestialBody {
 | Method | Description |
 | :--- | :--- |
 | `fc.log(message)` | Prints a timestamped message to the Telemetry Log in the UI. |
+| `fc.speak(text, options?)` | Speaks text aloud using the browser's Web Speech API. Returns a `Promise` that resolves when speech finishes. |
 
----
+### Text-to-Speech (Awaitable)
 
-## Example: Basic Orbit Stabilization
-```javascript
-function autopilotStep(t, fc) {
-    const alt = fc.getAltitude();
-    const vOrbital = Math.sqrt(2.442e-7 / (1.0 + alt));
-    const tSpeed = fc.getTangentialSpeed();
-
-    if (alt > 0.15 && tSpeed < vOrbital) {
-        fc.setThrust(1.0);
-        fc.log("Correcting orbital velocity...");
-    } else {
-        fc.setThrust(0);
-    }
-}
-```
-
-## Text-to-Speech
-
-### fc.speak(text, options?)
-Speaks text aloud using the browser's Web Speech API.
+You can use top-level `await` to chain speech commands sequentially before other logic executes.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -106,7 +110,35 @@ Speaks text aloud using the browser's Web Speech API.
 | `options.volume` | number | `1.0` | Volume (0 – 1) |
 
 ```javascript
-fc.speak("Booster separation in 3 seconds.");
-fc.speak(`Altitude: ${Math.round(alt * 6371)} kilometers.`);
-fc.speak("Orbital insertion complete.", { rate: 0.9, pitch: 0.8 });
+// Top-level await is fully supported!
+await fc.speak("Welcome to flight control.");
+await fc.speak("Initiating pre-flight sequence.", { rate: 0.9, pitch: 0.8 });
+fc.log("Audio sequence complete.");
+```
+
+---
+
+## Example: Auto-Orbit Logic
+```javascript
+fc.setLaunchTime(10); // Start 10s UI countdown
+
+// You can await speech commands!
+await fc.speak("Flight systems engaged.");
+await fc.speak("Standing by for launch.");
+
+let ignited = false;
+
+fc.on("step", (t, fc) => {
+    // Wait for countdown
+    if (t < 10) return;
+
+    // Trigger ignition once
+    if (!ignited) {
+        fc.igniteBooster(32000000, 120);
+        ignited = true;
+    }
+
+    // Flight control...
+    fc.setThrust(1.0);
+});
 ```

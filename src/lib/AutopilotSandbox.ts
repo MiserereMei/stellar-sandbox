@@ -12,6 +12,11 @@ export class AutopilotSandbox {
       // Create a dedicated flight control (fc) instance for this sandbox
       const fc = {
         _state: {} as any,
+        _events: {} as Record<string, Function[]>,
+        on: (event: string, cb: Function) => {
+          if (!fc._events[event]) fc._events[event] = [];
+          fc._events[event].push(cb);
+        },
         getThrust: () => fc._state.thrust,
         getRotate: () => fc._state.rotate,
         getRotation: () => fc._state.rotation,
@@ -34,7 +39,11 @@ export class AutopilotSandbox {
         setPitch: (amount: number) => this.onCommand('setPitch', [amount]),
         setLaunchTime: (time: number) => this.onCommand('setLaunchTime', [time]),
         setLaunchSchedule: (time: number) => this.onCommand('setLaunchTime', [time]),
-        speak: (text: string, options: any) => this.onCommand('speak', [text, options]),
+        speak: (text: string, options: any) => {
+          return new Promise(resolve => {
+            this.onCommand('speak', [text, options, resolve]);
+          });
+        },
         igniteBooster: (thrust: number, time: number, cb: () => void) => {
             this.onCommand('igniteBooster', [thrust, time, cb]);
         },
@@ -60,54 +69,61 @@ export class AutopilotSandbox {
         clearTimeout,
         setInterval,
         clearInterval,
+        Promise, // Expose Promise for async/await
         console: {
           log: (...args: any[]) => this.onCommand('log', [args.join(' ')]),
           error: (...args: any[]) => this.onCommand('log', ['ERROR: ' + args.join(' ')]),
         }
       };
 
-      // Evaluation in a restricted scope
-      this.scriptFn = new Function('context', `
+      // Evaluation in a restricted scope using AsyncFunction to support top-level await
+      const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+      this.scriptFn = new AsyncFunction('context', `
         with(context) {
           ${script}
-          return {
-            autopilotStep: typeof autopilotStep !== 'undefined' ? autopilotStep : null,
-            onLaunch: typeof onLaunch !== 'undefined' ? onLaunch : null
-          };
+          // Support both fc.on and global functions
+          if (typeof autopilotStep !== 'undefined') fc.on('step', autopilotStep);
+          if (typeof onLaunch !== 'undefined') fc.on('launch', onLaunch);
         }
       `);
 
-      const result = this.scriptFn(context);
-      this.sandboxProxy = {
-          fc,
-          autopilotStep: result.autopilotStep,
-          onLaunch: result.onLaunch
-      };
+      this.scriptFn(context).catch((err: any) => {
+        this.onError('Async Runtime Error: ' + err.message);
+      });
+      
+      this.sandboxProxy = { fc };
 
-      this.onCommand('init_success', [!!result.onLaunch]);
+      this.onCommand('init_success', [!!(fc._events['launch']?.length)]);
     } catch (err: any) {
       this.onError('Init Error: ' + err.message);
     }
   }
 
   step(missionTime: number, state: any) {
-    if (!this.sandboxProxy || !this.sandboxProxy.autopilotStep) return;
+    if (!this.sandboxProxy) return;
     this.sandboxProxy.fc._state = state;
-    try {
-      this.sandboxProxy.autopilotStep(missionTime, this.sandboxProxy.fc);
-    } catch (err: any) {
-      this.onError('Runtime Error: ' + err.message);
-      this.stop();
+    const listeners = this.sandboxProxy.fc._events['step'] || [];
+    for (const cb of listeners) {
+      try {
+        cb(missionTime, this.sandboxProxy.fc);
+      } catch (err: any) {
+        this.onError('Runtime Error: ' + err.message);
+        this.stop();
+        break;
+      }
     }
   }
 
   launch(state: any) {
-    if (!this.sandboxProxy || !this.sandboxProxy.onLaunch) return;
+    if (!this.sandboxProxy) return;
     this.sandboxProxy.fc._state = state;
-    try {
-      this.sandboxProxy.onLaunch(this.sandboxProxy.fc);
-    } catch (err: any) {
-      this.onError('onLaunch Error: ' + err.message);
+    const listeners = this.sandboxProxy.fc._events['launch'] || [];
+    for (const cb of listeners) {
+      try {
+        cb(this.sandboxProxy.fc);
+      } catch (err: any) {
+        this.onError('onLaunch Error: ' + err.message);
+      }
     }
   }
 

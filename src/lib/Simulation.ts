@@ -15,6 +15,7 @@ export interface Body {
 
 import { Vehicle } from './Vehicle';
 import { AutopilotSandbox } from './AutopilotSandbox';
+import orbitScript from '../scripts/autopilot/auto-orbit.js?raw';
 
 export class Simulation {
   bodies: Body[] = [];
@@ -605,7 +606,7 @@ export class Simulation {
         }
         return;
       }
-      if (!this.isAutopilotActive || !this.vehicle) return;
+      if (!this.vehicle) return;
 
       switch (command) {
         case 'setThrust':
@@ -629,13 +630,20 @@ export class Simulation {
           this.autopilotLog(`MISSION SCHEDULED: T-0 at T+${args[0]}s`);
           break;
         case 'speak':
-          if (!('speechSynthesis' in window)) return;
+          if (!('speechSynthesis' in window)) {
+            if (args[2]) args[2]();
+            return;
+          }
           const utter = new SpeechSynthesisUtterance(String(args[0]));
           const options = args[1];
           utter.lang = options?.lang ?? 'en-US';
           utter.rate = options?.rate ?? 1.0;
           utter.pitch = options?.pitch ?? 1.0;
           utter.volume = options?.volume ?? 1.0;
+          if (args[2]) {
+            utter.onend = () => args[2]();
+            utter.onerror = () => args[2]();
+          }
           const voices = window.speechSynthesis.getVoices();
           const preferred = voices.find(v => v.lang === (options?.lang ?? 'en-US'));
           if (preferred) utter.voice = preferred;
@@ -714,7 +722,7 @@ export class Simulation {
 
   loadOrbitMission() {
     this.clear();
-    this.timeScale = 100;
+    this.timeScale = 1;
     this.G = 1.541e-6;
     this.paused = true; // Wait for user to hit engage
 
@@ -736,51 +744,7 @@ export class Simulation {
       this.camera.zoom = 100;
     }
 
-    this.currentScript = `// Precision Auto-Orbit Mission Script
-// Automates liftoff, gravity turn, and tangential lock.
-
-const flightPlan = [
-    { time: 0, task: "IGNITION", action: (fc) => fc.setThrust(1.0) }
-];
-
-function autopilotStep(t, fc) {
-    // 1. Execute Schedule
-    flightPlan.forEach(event => {
-        if (!event.completed && t >= event.time) {
-            fc.log(\`T+\${t.toFixed(1)}s: \${event.task}\`);
-            event.action(fc);
-            event.completed = true;
-        }
-    });
-
-    // 2. Flight Logic
-    const alt = fc.getAltitude();
-    const heading = fc.getRotation(); 
-    const tSpeed = fc.getTangentialSpeed();
-    const vOrbital = Math.sqrt(1.541e-6 / (1.0 + alt));
-    
-    // A. Gravity Turn Phase
-    if (alt > 0.02 && alt < 0.30) {
-        const targetPitch = -90 + (alt - 0.02) * 320;
-        if (heading < targetPitch) fc.setRotate(0.1);
-        else fc.setRotate(-0.02);
-    } 
-    // B. Horizontal Lock Phase (Crucial for stability)
-    else if (alt >= 0.30) {
-        if (heading < -1) fc.setRotate(0.1);
-        else if (heading > 1) fc.setRotate(-0.1);
-        else fc.setRotate(0); 
-    }
-
-    // C. Orbital Cutoff
-    if (alt > 0.15 && tSpeed >= vOrbital) {
-        if (fc.getThrust() > 0) {
-            fc.setThrust(0);
-            fc.setRotate(0);
-            fc.log("ORBIT ACHIEVED!");
-        }
-    }
-}`;
+    this.currentScript = orbitScript;
   }
 
   loadArtemis2Mission() {
