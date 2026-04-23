@@ -98,6 +98,24 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Ignore key events when typing in inputs/textareas
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Space → Toggle pause/resume
+      if (e.code === 'Space') {
+        e.preventDefault();
+        sim.paused = !sim.paused;
+      }
+
+      // Backspace / Delete → Delete selected body
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (selectedBodyId) {
+          e.preventDefault();
+          sim.bodies = sim.bodies.filter(b => b.id !== selectedBodyId);
+          setSelectedBodyId(null);
+        }
+      }
+
       // Ctrl+Shift+S → toggle streaming mode
       if (e.ctrlKey && e.shiftKey && e.key === 'S') {
         e.preventDefault();
@@ -117,7 +135,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [sim, addAutopilotLog]);
+  }, [sim, addAutopilotLog, selectedBodyId]);
 
 
   const handleSetApiKey = (key: string) => {
