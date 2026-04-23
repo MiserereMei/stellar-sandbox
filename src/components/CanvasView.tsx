@@ -229,6 +229,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     orbitParentId: null,
     hoveredBodyId: null,
     lastReactHoveredRocketId: null,
+    previewRotation: -Math.PI / 2,
+    lastMouseScreenPos: { x: 0, y: 0 },
   });
 
   // Sync selectedBodyId back to sim so drawing knows
@@ -242,12 +244,38 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     iState.isDraggingVector = false;
     iState.dragStartWorldPos = null;
     iState.orbitParentId = null;
-    sim.previewBody = null;
-    sim.previewVelocityVector = null;
-    sim.orbitPreview = null;
-    sim.rulerStartPoint = null;
     sim.rulerEndPoint = null;
   }, [toolMode, sim]);
+
+  // Sync previewBody instantly when creationPreset or addMode changes
+  useEffect(() => {
+    if (toolMode === "add") {
+      const iState = interactionState.current;
+      const wx = sim.screenToWorld(
+        iState.lastMouseScreenPos.x,
+        iState.lastMouseScreenPos.y,
+        containerRef.current?.clientWidth || 800,
+        containerRef.current?.clientHeight || 600
+      );
+      
+      if (addMode === "orbit" && !iState.orbitParentId) {
+        sim.previewBody = null;
+      } else {
+        const meta = sim.getBodyMetadataFromPreset();
+        sim.previewBody = {
+          id: "preview",
+          ...meta,
+          type: sim.creationTemplate.presetType,
+          position: wx,
+          velocity: { x: 0, y: 0 },
+          trail: [],
+          rotation: iState.previewRotation,
+        } as any;
+      }
+    } else {
+      sim.previewBody = null;
+    }
+  }, [toolMode, addMode, creationPreset, sim]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -341,7 +369,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           const id = generateId();
 
           let spawnPos = wx;
-          let spawnRotation = -Math.PI / 2; // Default up
+          let spawnRotation = iState.previewRotation; // Use the rotated preview angle
 
           // Check for surface snap
           let parentBody = null;
@@ -458,7 +486,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                   const v: any = {
                     ...newBody,
                     type: sim.creationTemplate.presetType as any,
-                    rotation: Math.atan2(vOrbitY, vOrbitX),
+                    rotation: iState.previewRotation, // Maintain user's rotation even in orbit
                     angularVelocity: 0,
                     isHeatProtected:
                       sim.creationTemplate.presetType === "heatProtectedRocket",
@@ -643,6 +671,29 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           mousePos: wx,
         };
       }
+
+      iState.lastMouseScreenPos = { x: sx, y: sy };
+
+      if (toolMode === "add") {
+        // Orbit mode special case: Hide preview until a parent body is selected
+        if (addMode === "orbit" && !iState.orbitParentId) {
+          sim.previewBody = null;
+          return;
+        }
+
+        const meta = sim.getBodyMetadataFromPreset();
+        sim.previewBody = {
+          id: "preview",
+          ...meta,
+          type: sim.creationTemplate.presetType,
+          position: wx,
+          velocity: { x: 0, y: 0 },
+          trail: [],
+          rotation: iState.previewRotation,
+        } as any;
+      } else {
+        sim.previewBody = null;
+      }
     };
 
     const onPointerUp = (e: PointerEvent) => {
@@ -725,6 +776,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
     const onWheel = (e: WheelEvent) => {
       if (streamingRef.current) return;
+      const iState = interactionState.current;
       const rect = container.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -737,6 +789,16 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         container.clientHeight,
       );
 
+      if (toolMode === "add") {
+        // Rotate preview instead of zooming
+        const isRocket = sim.creationTemplate.presetType === 'rocket' || sim.creationTemplate.presetType === 'heatProtectedRocket';
+        if (isRocket) {
+          const rotationStep = 0.1;
+          iState.previewRotation += e.deltaY * 0.001;
+          return;
+        }
+      }
+
       const zoomSpeed = 0.001;
       const oldZoom = sim.camera.zoom;
       let newZoom = oldZoom * Math.exp(-e.deltaY * zoomSpeed);
@@ -744,10 +806,24 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       
       sim.camera.zoom = newZoom;
 
-      // 2. If not following, anchor zoom to mouse position
       if (!sim.camera.followingId) {
         sim.camera.x = worldMouseBefore.x - (sx - container.clientWidth / 2) / newZoom;
         sim.camera.y = worldMouseBefore.y - (sy - container.clientHeight / 2) / newZoom;
+      }
+
+      // Update preview position immediately after zoom shift
+      if (toolMode === "add") {
+        const newWx = sim.screenToWorld(sx, sy, container.clientWidth, container.clientHeight);
+        const meta = sim.getBodyMetadataFromPreset();
+        sim.previewBody = {
+          id: "preview",
+          ...meta,
+          type: sim.creationTemplate.presetType,
+          position: newWx,
+          velocity: { x: 0, y: 0 },
+          trail: [],
+          rotation: iState.previewRotation,
+        } as any;
       }
 
       // 3. Update mouseWorldPos immediately so tools (ruler) stay in sync
@@ -834,7 +910,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     };
 
     container.addEventListener("pointerdown", onPointerDown);
-    container.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointermove", onPointerMove);
     container.addEventListener("dblclick", onDblClick);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
@@ -845,7 +921,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
 
     return () => {
       container.removeEventListener("pointerdown", onPointerDown);
-      container.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointermove", onPointerMove);
+      container.removeEventListener("dblclick", onDblClick);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("keydown", onKeyDown);
@@ -1601,6 +1678,37 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             txt.alpha = 0.7;
             txt.position.set(targetPos.x * zoom, (targetPos.y - b.radius) * zoom - 4);
             txt.scale.set(1);
+          }
+        }
+
+        // Render Preview Body (Ghost) - Shows what's about to be placed
+        if (sim.previewBody) {
+          const b = sim.previewBody;
+          const isRocket = (b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket';
+          const px = (b.position.x - cx) * zoom;
+          const py = (b.position.y - cy) * zoom;
+
+          if (isRocket) {
+            const v = b as any;
+            const l_px = Math.max(v.length || b.radius * 2, 6 / zoom) * zoom;
+            const r_px = l_px / 2;
+            const rot = v.rotation;
+            const cos = Math.cos(rot);
+            const sin = Math.sin(rot);
+            const pts = [
+              { x: 1.0, y: 0 }, { x: 0.7, y: 0.15 }, { x: -0.8, y: 0.15 },
+              { x: -1.0, y: 0.4 }, { x: -0.9, y: 0.15 }, { x: -0.9, y: -0.15 },
+              { x: -1.0, y: -0.4 }, { x: -0.8, y: -0.15 }, { x: 0.7, y: -0.15 },
+            ];
+            const polyPoints = pts.flatMap((p) => [
+              px + (p.x * r_px * cos - p.y * r_px * sin),
+              py + (p.x * r_px * sin + p.y * r_px * cos),
+            ]);
+            bodiesGraphics.poly(polyPoints).fill({ color: b.color, alpha: 0.4 });
+            bodiesGraphics.poly(polyPoints).stroke({ width: 2, color: 0xffffff, alpha: 0.5 });
+          } else {
+            bodiesGraphics.circle(px, py, b.radius * zoom).fill({ color: b.color, alpha: 0.4 });
+            bodiesGraphics.circle(px, py, b.radius * zoom).stroke({ width: 2, color: 0xffffff, alpha: 0.5 });
           }
         }
 
