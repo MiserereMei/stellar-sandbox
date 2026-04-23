@@ -637,8 +637,17 @@ export class Simulation {
           const utter = new SpeechSynthesisUtterance(String(args[0]));
           const options = args[1];
           utter.lang = options?.lang ?? 'en-US';
-          utter.rate = options?.rate ?? 1.0;
-          utter.pitch = options?.pitch ?? 1.0;
+          
+          // Dynamic Audio Effects based on simulation speed
+          const baseRate = options?.rate ?? 1.0;
+          const basePitch = options?.pitch ?? 1.0;
+          const ts = Math.abs(this.timeScale);
+          
+          // Scale rate linearly, clamp to Web Speech API limits [0.1, 10]
+          utter.rate = Math.max(0.1, Math.min(10, baseRate * ts));
+          // Keep pitch constant as per user preference
+          utter.pitch = basePitch;
+          
           utter.volume = options?.volume ?? 1.0;
           if (args[2]) {
             utter.onend = () => args[2]();

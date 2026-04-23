@@ -105,7 +105,13 @@ export class AutopilotSandbox {
     const listeners = this.sandboxProxy.fc._events['step'] || [];
     for (const cb of listeners) {
       try {
-        cb(missionTime, this.sandboxProxy.fc);
+        const res = cb(missionTime, this.sandboxProxy.fc);
+        if (res && typeof res.catch === 'function') {
+            res.catch((err: any) => {
+                this.onError('Runtime Error (Async): ' + err.message);
+                this.stop();
+            });
+        }
       } catch (err: any) {
         this.onError('Runtime Error: ' + err.message);
         this.stop();
@@ -120,7 +126,10 @@ export class AutopilotSandbox {
     const listeners = this.sandboxProxy.fc._events['launch'] || [];
     for (const cb of listeners) {
       try {
-        cb(this.sandboxProxy.fc);
+        const res = cb(this.sandboxProxy.fc);
+        if (res && typeof res.catch === 'function') {
+            res.catch((err: any) => this.onError('onLaunch Async Error: ' + err.message));
+        }
       } catch (err: any) {
         this.onError('onLaunch Error: ' + err.message);
       }

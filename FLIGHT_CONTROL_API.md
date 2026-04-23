@@ -53,11 +53,12 @@ interface CelestialBody {
 
 ## Lifecycle Events
 
-The system uses a single primary event listener for flight logic.
+The system uses an event-driven architecture to manage flight logic.
 
 | Event | Callback Signature | Description |
 | :--- | :--- | :--- |
 | `"step"` | `(t, fc) => {}` | Fires every physics frame (~60Hz). This is where all sensors are read and actuators are set. |
+| `"launch"`| `(fc) => {}` | Fires exactly at T-0 once a launch is scheduled. Useful for ignition or one-time events. |
 
 ### Example
 ```javascript
@@ -71,13 +72,18 @@ fc.on("step", (t, fc) => {
     // 3. Actuators
     fc.setRotate(0.1);
 });
+
+fc.on("launch", async (fc) => {
+    await fc.speak("Liftoff!");
+    fc.igniteBooster(10000, 10);
+});
 ```
 
 ## Mission Control & UI
 
 | Method | Description | Units |
 | :--- | :--- | :--- |
-| `fc.setLaunchTime(seconds)` | Schedules a UI countdown (T-minus). Does NOT trigger an event; use `t` in the step loop to sync your logic. | Seconds |
+| `fc.setLaunchTime(seconds)` | Schedules a T-minus countdown. At T-0, it triggers the `"launch"` event. | Seconds |
 | `fc.igniteBooster(thrust, burnTime, onBurnout)` | Fires solid rocket boosters (SRBs) adding raw physical force. `onBurnout(fc)` is triggered when fuel runs out. | Newtons, Seconds |
 
 ## Cinematic Camera (Streaming Mode)
@@ -122,22 +128,13 @@ fc.log("Audio sequence complete.");
 ```javascript
 fc.setLaunchTime(10); // Start 10s UI countdown
 
-// You can await speech commands!
-await fc.speak("Flight systems engaged.");
-await fc.speak("Standing by for launch.");
-
-let ignited = false;
+// Runs exactly at T-0
+fc.on("launch", async (fc) => {
+    await fc.speak("Liftoff!");
+    fc.igniteBooster(32000000, 120);
+});
 
 fc.on("step", (t, fc) => {
-    // Wait for countdown
-    if (t < 10) return;
-
-    // Trigger ignition once
-    if (!ignited) {
-        fc.igniteBooster(32000000, 120);
-        ignited = true;
-    }
-
     // Flight control...
     fc.setThrust(1.0);
 });

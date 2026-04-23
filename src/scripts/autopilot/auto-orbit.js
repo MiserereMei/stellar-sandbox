@@ -1,10 +1,13 @@
 // --- INITIALIZATION ---
-fc.setLaunchTime(10); // UI Countdown only (T-10 to T-0)
-fc.speak("Liftoff!");
-fc.log(`🚀 Mission Started: Target 1500 KM`);
-fc.igniteBooster(32000000, 126, () => {
-    fc.log("📦 Booster jettisoned.");
-    fc.speak("Booster separation confirmed.");
+fc.setLaunchTime(10); // Schedule launch for T+10s
+
+fc.on("launch", async () => {
+    fc.log(`🚀 Mission Started: Target 1500 KM`);
+    await fc.speak("Liftoff!");
+    fc.igniteBooster(32000000, 126, () => {
+        fc.log("📦 Booster jettisoned.");
+        fc.speak("Booster separation confirmed.");
+    });
 });
 
 // --- CONTROL PANEL ---
@@ -27,6 +30,7 @@ fc.on("step", (t, fc) => {
             fc.speak(remaining.toString());
             lastCountdown = remaining;
         }
+        return;
     }
 
     const earth = fc.getDominantBody();
@@ -35,20 +39,20 @@ fc.on("step", (t, fc) => {
     const earthRadiusMeters = earth.circumference / (2 * Math.PI);
     const kmToSimUnits = (km) => (km * 1000) / earthRadiusMeters;
     const simUnitsToKm = (units) => (units * earthRadiusMeters) / 1000;
-    
+
     const targetAltSim = kmToSimUnits(TARGET_KM);
     const turnStartSim = kmToSimUnits(TURN_START_KM);
 
     const alt = fc.getAltitude();
-    const rSpeed = fc.getRadialSpeed(); 
-    const tSpeed = fc.getTangentialSpeed(); 
+    const rSpeed = fc.getRadialSpeed();
+    const tSpeed = fc.getTangentialSpeed();
     const shipAngle = fc.getRotation();
     const angVel = fc.getAngularVelocity();
     const vOrbital = Math.sqrt(1.541e-6 / (1.0 + alt));
     const currentKm = simUnitsToKm(alt);
 
-    const relativeUp = earth.angle + 180; 
-    const relativeHorizon = earth.angle - 90; 
+    const relativeUp = earth.angle + 180;
+    const relativeHorizon = earth.angle - 90;
 
     const telemetry = `T+${Math.floor(t)}s | ${currentKm.toFixed(1)}km | Vel:${tSpeed.toFixed(6)}`;
     if (Math.floor(t) > lastTelemetryTime) {
@@ -73,7 +77,7 @@ fc.on("step", (t, fc) => {
         case ST.TURN:
             let progress = (alt - turnStartSim) / (targetAltSim - turnStartSim);
             progress = Math.max(0, Math.min(1, progress));
-            targetAngle = relativeUp + (progress * 80); 
+            targetAngle = relativeUp + (progress * 80);
             if (tSpeed >= vOrbital * 0.98) {
                 currentState = ST.STABLE;
                 fc.log(">>> ORBIT REACHED. Stabilization active.");
@@ -81,11 +85,11 @@ fc.on("step", (t, fc) => {
             break;
         case ST.STABLE:
             targetAngle = relativeHorizon;
-            if (rSpeed < -0.000001) { 
-                targetAngle = relativeHorizon - 45; 
-                throttle = 1.0; 
+            if (rSpeed < -0.000001) {
+                targetAngle = relativeHorizon - 45;
+                throttle = 1.0;
             } else if (tSpeed < vOrbital) {
-                throttle = 0.6; 
+                throttle = 0.6;
             } else {
                 throttle = 0;
             }
