@@ -29,12 +29,13 @@ interface ToolbarProps {
   setApiKey: (val: string) => void;
   lastAction: (() => void) | null;
   setLastAction: (val: (() => void) | null) => void;
+  isMobile: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   sim, toolMode, setToolMode, addMode, setAddMode, creationPreset, setCreationPreset, activePopUp, setActivePopUp, visualSettings, setVisualSettings,
   showOutliner, setShowOutliner, streamingMode, setStreamingMode, apiKey, setApiKey, lastAction, setLastAction,
-  engineSettings, setEngineSettings
+  engineSettings, setEngineSettings, isMobile
 }) => {
   const [paused, setPaused] = useState(sim.paused);
   const [timeScale, setTimeScale] = useState(sim.timeScale);
@@ -251,7 +252,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#020508]/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-between px-3 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.6)] selection:bg-blue-500/30">
+      <div className={`fixed bottom-0 left-0 right-0 ${isMobile ? 'h-20' : 'h-16'} bg-[#020508]/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-between px-3 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.6)] selection:bg-blue-500/30`}>
 
         {/* LEFT: SIMULATION CONTROLS */}
         <div className="flex items-center gap-6">
@@ -299,7 +300,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </DockButton>
           </div>
 
-          <div className="w-px h-8 bg-white/10" />
+          {!isMobile && <div className="w-px h-8 bg-white/10" />}
 
           {/* TIME CONTROLS */}
           <div className="flex items-center gap-3">
@@ -341,63 +342,69 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               </button>
             </div>
 
-            <div
-              onClick={handleDateClick}
-              className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''} ${activePopUp === 'jump' ? 'border-blue-500/50 bg-blue-500/10' : ''}`}
-            >
-              {isJumping && (
-                <div className="absolute left-0 bottom-0 h-full bg-blue-500/20 transition-all duration-75" style={{ width: `${jumpProgress * 100}%` }} />
-              )}
-              <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-0.5 group-hover:text-blue-400 transition-colors z-10 relative">
-                {isJumping ? 'Calculating...' : 'Date'}
-              </span>
-              <span ref={dateRef} className="text-[12px] font-mono font-bold text-white tracking-tight z-10 relative">
-                {sim.getCurrentDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-              </span>
-            </div>
+            {!isMobile && (
+              <div
+                onClick={handleDateClick}
+                className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''} ${activePopUp === 'jump' ? 'border-blue-500/50 bg-blue-500/10' : ''}`}
+              >
+                {isJumping && (
+                  <div className="absolute left-0 bottom-0 h-full bg-blue-500/20 transition-all duration-75" style={{ width: `${jumpProgress * 100}%` }} />
+                )}
+                <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-0.5 group-hover:text-blue-400 transition-colors z-10 relative">
+                  {isJumping ? 'Calculating...' : 'Date'}
+                </span>
+                <span ref={dateRef} className="text-[12px] font-mono font-bold text-white tracking-tight z-10 relative">
+                  {sim.getCurrentDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* RIGHT: NAVIGATION & SYSTEM */}
-        <div className="flex items-center gap-6">
-          {/* SCALE & ZOOM POD */}
           <div className="flex items-center gap-6">
-            <div className="flex flex-col items-center justify-center gap-1.5 w-36 shrink-0">
-              <div className="h-1 border-x border-b border-white/30 w-full relative">
-                <div className="absolute inset-x-0 bottom-0 flex justify-center">
-                  <div className="h-[2px] bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]" style={{ width: `${Math.min(100, (scale.px / 128) * 100)}%` }} />
+            {/* SCALE & ZOOM POD */}
+            <div className="flex items-center gap-6">
+              {!isMobile && (
+                <div className="flex flex-col items-center justify-center gap-1.5 w-36 shrink-0">
+                  <div className="h-1 border-x border-b border-white/30 w-full relative">
+                    <div className="absolute inset-x-0 bottom-0 flex justify-center">
+                      <div className="h-[2px] bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]" style={{ width: `${Math.min(100, (scale.px / 128) * 100)}%` }} />
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-tight opacity-70 truncate w-full text-center">{scale.label}</span>
                 </div>
+              )}
+
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
+                <button
+                  onClick={() => { setToolMode('ruler'); setActivePopUp(null); }}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all group ${toolMode === 'ruler'
+                    ? 'bg-blue-600 text-white'
+                    : 'hover:bg-white/10 text-gray-400 hover:text-white'
+                    }`}
+                  title="Distance Ruler"
+                >
+                  <Ruler size={14} className={toolMode === 'ruler' ? '' : 'group-hover:scale-110'} />
+                </button>
               </div>
-              <span className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-tight opacity-70 truncate w-full text-center">{scale.label}</span>
+
+              {!isMobile && (
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
+                  <button onClick={handleZoomIn} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all group">
+                    <ZoomIn size={16} className="group-hover:scale-110" />
+                  </button>
+                  <button onClick={handleZoomOut} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all group">
+                    <ZoomOut size={16} className="group-hover:scale-110" />
+                  </button>
+                  <button onClick={handleResetZoom} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all group">
+                    <Maximize size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
-              <button
-                onClick={() => { setToolMode('ruler'); setActivePopUp(null); }}
-                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all group ${toolMode === 'ruler'
-                  ? 'bg-blue-600 text-white'
-                  : 'hover:bg-white/10 text-gray-400 hover:text-white'
-                  }`}
-                title="Distance Ruler"
-              >
-                <Ruler size={14} className={toolMode === 'ruler' ? '' : 'group-hover:scale-110'} />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
-              <button onClick={handleZoomIn} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all group">
-                <ZoomIn size={16} className="group-hover:scale-110" />
-              </button>
-              <button onClick={handleZoomOut} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all group">
-                <ZoomOut size={16} className="group-hover:scale-110" />
-              </button>
-              <button onClick={handleResetZoom} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all group">
-                <Maximize size={16} className="group-hover:rotate-90 transition-transform duration-300" />
-              </button>
-            </div>
-          </div>
-
-          <div className="w-px h-8 bg-white/10" />
+            {!isMobile && <div className="w-px h-8 bg-white/10" />}
 
           {/* SYSTEM ACTIONS */}
           <div className="flex items-center gap-1.5">

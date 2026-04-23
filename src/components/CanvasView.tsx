@@ -24,7 +24,13 @@ import {
   Maximize,
   Ruler,
   Terminal,
+  Info,
+  RotateCw,
+  Trash2,
+  Camera,
 } from "lucide-react";
+import { ContextMenu } from "./ContextMenu";
+import { AnimatePresence, motion } from "motion/react";
 
 // Disable PIXI's buggy static ResizePlugin as we handle resizing manually in the ticker
 PIXI.extensions.remove(PIXI.ResizePlugin);
@@ -39,6 +45,8 @@ interface CanvasViewProps {
   selectedBodyId: string | null;
   visualSettings: VisualSettings;
   setActivePopUp: (val: ActivePopUp) => void;
+  isStreaming: boolean;
+  isMobile: boolean;
 }
 const generateCirclePoints = (
   x: number,
@@ -182,11 +190,39 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
   visualSettings,
   setActivePopUp,
   isStreaming,
+  isMobile,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef(visualSettings);
   const streamingRef = useRef(isStreaming);
   const [hoveredRocketId, setHoveredRocketId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    id: number;
+    x: number;
+    y: number;
+    isTriggered: boolean;
+    bodyId?: string;
+    preview?: {
+      color: string;
+      radius: number;
+      initialScreenRadius: number;
+      objectScreenPos: { x: number, y: number }
+    }
+  } | null>(null);
+  
+  const contextMenuRef = useRef(contextMenu);
+  useEffect(() => { contextMenuRef.current = contextMenu; }, [contextMenu]);
+
+  const [hidingBodyId, _setHidingBodyId] = useState<string | null>(null);
+  const hidingBodyIdRef = useRef<string | null>(null);
+  const lastClosedBodyIdRef = useRef<string | null>(null);
+
+  const setHidingBodyId = (id: string | null) => {
+    hidingBodyIdRef.current = id;
+    _setHidingBodyId(id);
+  };
+
+  const wasPausedBeforeLift = useRef<boolean>(false);
   const [, forceRender] = useState(0);
 
   // Sync settings ref
@@ -214,6 +250,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     orbitParentId: string | null;
     hoveredBodyId: string | null;
     lastReactHoveredRocketId: string | null;
+    longPressTimer: any | null;
+    longPressInterval: any | null;
+    pointerDownScreenPos: Vector2 | null;
   }>({
     isDraggingVector: false,
     dragStartWorldPos: null,
@@ -229,6 +268,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     orbitParentId: null,
     hoveredBodyId: null,
     lastReactHoveredRocketId: null,
+    longPressTimer: null,
+    longPressInterval: null,
+    pointerDownScreenPos: null,
     previewRotation: -Math.PI / 2,
     lastMouseScreenPos: { x: 0, y: 0 },
     zoomVelocity: 1,
@@ -301,6 +343,73 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       // Stop all momentum on interaction
       iState.hasMomentum = false;
       iState.zoomVelocity = 1;
+      iState.pointerDownScreenPos = { x: sx, y: sy };
+
+      // START LONG PRESS TIMER
+      if (e.pointerType === 'touch' || isMobile) {
+        if (iState.longPressTimer) clearTimeout(iState.longPressTimer);
+        if (iState.longPressInterval) clearInterval(iState.longPressInterval);
+        
+        // Show sphere after 50ms to avoid flicker on instant taps
+        iState.longPressInterval = setTimeout(() => {
+          // Find what's under the finger
+          let bodyId: string | null = null;
+          let liftedBody: Body | null = null;
+          for (let i = sim.bodies.length - 1; i >= 0; i--) {
+            const b = sim.bodies[i];
+            const distSq = (b.position.x - wx.x) ** 2 + (b.position.y - wx.y) ** 2;
+            if (distSq <= Math.max(b.radius, 30 / sim.camera.zoom) ** 2) {
+              bodyId = b.id;
+              liftedBody = b;
+              break;
+            }
+          }
+
+          if (liftedBody) {
+            wasPausedBeforeLift.current = sim.paused;
+            sim.paused = true;
+          }
+
+          const rect = containerRef.current?.getBoundingClientRect();
+          let previewData = undefined;
+          if (liftedBody && rect) {
+            const screenPos = sim.worldToScreen(
+              liftedBody.position.x, 
+              liftedBody.position.y, 
+              containerRef.current!.clientWidth, 
+              containerRef.current!.clientHeight
+            );
+            previewData = {
+              type: sim.isBodyBlackHole(liftedBody) ? 'blackhole' : 
+                    (((liftedBody as any).type === 'rocket' || (liftedBody as any).type === 'heatProtectedRocket') ? 'rocket' : 'planet'),
+              color: liftedBody.color,
+              radius: liftedBody.radius,
+              rotation: (liftedBody as any).rotation || 0, // Pass rotation
+              thrusting: (liftedBody as any).thrusting,
+              initialScreenRadius: liftedBody.radius * sim.camera.zoom,
+              objectScreenPos: { x: screenPos.x + rect.left, y: screenPos.y + rect.top }
+            };
+          }
+
+          setContextMenu({ 
+            id: Date.now(),
+            x: e.clientX, 
+            y: e.clientY, 
+            bodyId, 
+            isTriggered: false,
+            preview: previewData
+          });
+          iState.longPressInterval = null;
+        }, 50);
+
+        iState.longPressTimer = setTimeout(() => {
+          if (navigator.vibrate) navigator.vibrate(20);
+          setContextMenu(prev => prev ? { ...prev, isTriggered: true } : null);
+          iState.isPanning = false; // STOP PANNING
+          iState.longPressTimer = null;
+          iState.longPressInterval = null; 
+        }, 600);
+      }
 
       sim.mouseWorldPos = wx;
 
@@ -337,17 +446,19 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       ) {
         // Did we click a body?
         let clickedBodyId: string | null = null;
+        const selectionRadius = isMobile || e.pointerType === 'touch' ? 30 : 10;
         for (let i = sim.bodies.length - 1; i >= 0; i--) {
           const b = sim.bodies[i];
           const distSq =
             (b.position.x - wx.x) ** 2 + (b.position.y - wx.y) ** 2;
-          if (distSq <= Math.max(b.radius, 10 / sim.camera.zoom) ** 2) {
+          if (distSq <= Math.max(b.radius, selectionRadius / sim.camera.zoom) ** 2) {
             clickedBodyId = b.id;
             break;
           }
         }
 
-        if (e.button === 0 && toolMode === "select") {
+        // On desktop, select immediately on left click
+        if (e.button === 0 && toolMode === "select" && e.pointerType !== 'touch' && !isMobile) {
           onSelectBody(clickedBodyId);
           if (clickedBodyId) return;
         }
@@ -441,9 +552,10 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             let clickedBodyId: string | null = null;
             for (let i = sim.bodies.length - 1; i >= 0; i--) {
               const b = sim.bodies[i];
+              const selectionRadius = isMobile || e.pointerType === 'touch' ? 30 : 10;
               const distSq =
                 (b.position.x - wx.x) ** 2 + (b.position.y - wx.y) ** 2;
-              if (distSq <= Math.max(b.radius, 10 / sim.camera.zoom) ** 2) {
+              if (distSq <= Math.max(b.radius, selectionRadius / sim.camera.zoom) ** 2) {
                 clickedBodyId = b.id;
                 break;
               }
@@ -516,6 +628,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       }
     };
 
+
+
+
     const onPointerMove = (e: PointerEvent) => {
       if (streamingRef.current) return;
       const rect = container.getBoundingClientRect();
@@ -530,11 +645,31 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       );
       const iState = interactionState.current;
 
+      iState.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // Cancel long press if finger moved too much
+      if (iState.pointerDownScreenPos) {
+        const dist = Math.sqrt((sx - iState.pointerDownScreenPos.x)**2 + (sy - iState.pointerDownScreenPos.y)**2);
+        if (dist > 15) {
+          if (iState.longPressTimer) {
+            clearTimeout(iState.longPressTimer);
+            iState.longPressTimer = null;
+          }
+          if (iState.longPressInterval) {
+            clearTimeout(iState.longPressInterval);
+            iState.longPressInterval = null;
+          }
+          // Only close if it hasn't triggered yet
+          setContextMenu(prev => (prev && !prev.isTriggered) ? null : prev);
+        } else if (contextMenu && !contextMenu.isTriggered) {
+            // Update sphere position slightly to follow finger
+            setContextMenu(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+        }
+      }
+
       // Stop all momentum on any pointer move
       iState.hasMomentum = false;
       iState.zoomVelocity = 1;
-
-      iState.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       // Handle pinch zoom init
       if (
@@ -558,7 +693,8 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       let hoveredId: string | null = null;
       for (let i = sim.bodies.length - 1; i >= 0; i--) {
         const b = sim.bodies[i];
-        let thresholdSq = Math.max(b.radius, 10 / sim.camera.zoom) ** 2;
+        const selectionRadius = isMobile || e.pointerType === 'touch' ? 30 : 10;
+        let thresholdSq = Math.max(b.radius, selectionRadius / sim.camera.zoom) ** 2;
 
         // Hysteresis: if this is the currently hovered rocket, give it a larger hit area (e.g. 150px)
         // so the user can move the mouse up to the floating menu without it disappearing.
@@ -708,6 +844,39 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     const onPointerUp = (e: PointerEvent) => {
       if (streamingRef.current) return;
       const iState = interactionState.current;
+
+      // CLEAR LONG PRESS
+      if (iState.longPressTimer || iState.longPressInterval) {
+        clearTimeout(iState.longPressTimer);
+        clearTimeout(iState.longPressInterval);
+        iState.longPressTimer = null;
+        iState.longPressInterval = null;
+        setContextMenu(prev => (prev && !prev.isTriggered) ? null : prev);
+
+        // If it was a short tap (no timer fired, no significant move)
+        const rect = container.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        if (iState.pointerDownScreenPos) {
+          const dist = Math.sqrt((sx - iState.pointerDownScreenPos.x)**2 + (sy - iState.pointerDownScreenPos.y)**2);
+          if (dist < 10 && toolMode === 'select' && !iState.isPanning && iState.activePointers.size === 1) {
+            // Find body for tap selection
+            const wx = sim.screenToWorld(sx, sy, container.clientWidth, container.clientHeight);
+            let tappedId: string | null = null;
+            const selectionRadius = isMobile || e.pointerType === 'touch' ? 30 : 10;
+            for (let i = sim.bodies.length - 1; i >= 0; i--) {
+              const b = sim.bodies[i];
+              const distSq = (b.position.x - wx.x)**2 + (b.position.y - wx.y)**2;
+              if (distSq <= Math.max(b.radius, selectionRadius / sim.camera.zoom)**2) {
+                tappedId = b.id;
+                break;
+              }
+            }
+            onSelectBody(tappedId);
+          }
+        }
+      }
+
       iState.activePointers.delete(e.pointerId);
       if (iState.activePointers.size < 2) {
         iState.lastPinchDist = null;
@@ -990,7 +1159,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       window.removeEventListener("wheel", preventBrowserZoom);
       window.removeEventListener("touchstart", preventTouchZoom);
     };
-  }, [sim, toolMode, addMode, creationPreset, onSelectBody]);
+  }, [sim, toolMode, addMode, creationPreset, onSelectBody, contextMenu]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1384,6 +1553,18 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         });
 
         for (const b of sortedBodies) {
+          // HIDE BODY IF IT IS LIFTED OR RETURNING (Animation in progress)
+          const isLifted = contextMenuRef.current && contextMenuRef.current.bodyId === b.id;
+          const isReturning = hidingBodyIdRef.current === b.id || lastClosedBodyIdRef.current === b.id;
+          
+          if (isLifted || isReturning) {
+            const txt = textCache.get(b.id);
+            if (txt) {
+              txt.visible = false;
+              txt.alpha = 0; 
+            }
+            continue; 
+          }
           const isLense = bgLenses.includes(b);
           const targetGraphics = isLense
             ? foregroundBodiesGraphics
@@ -1712,6 +1893,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           if (zoom > 0.5 || isHovered) {
             activeLabels.add(b.id);
             let txt = textCache.get(b.id);
+            if (txt) txt.visible = true;
             if (!txt) {
               txt = new PIXI.Text({
                 text: b.name,
@@ -2095,6 +2277,95 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           </div>
         );
       })()}
+
+      <AnimatePresence onExitComplete={() => {
+        setHidingBodyId(null);
+        lastClosedBodyIdRef.current = null;
+      }}>
+        {contextMenu && (
+          <ContextMenu
+            key={contextMenu.id}
+            x={contextMenu.x}
+            y={contextMenu.y}
+            isTriggered={contextMenu.isTriggered}
+            onClose={() => {
+              if (contextMenu.bodyId) {
+                lastClosedBodyIdRef.current = contextMenu.bodyId;
+                // Safety cleanup in case onExitComplete doesn't fire
+                setTimeout(() => { lastClosedBodyIdRef.current = null; }, 400);
+              }
+              setContextMenu(null);
+              if (!wasPausedBeforeLift.current) {
+                sim.paused = false;
+              }
+            }}
+            previewBody={contextMenu.preview}
+            quickActions={(() => {
+              const b = sim.bodies.find(body => body.id === contextMenu.bodyId) as any;
+              if (!b) return [];
+              const isRocket = b.type === 'rocket' || b.type === 'heatProtectedRocket';
+              if (!isRocket) return [];
+              return [
+                {
+                  icon: b.isAutopilotActive ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />,
+                  active: b.isAutopilotActive,
+                  onClick: () => {
+                    if (b.isAutopilotActive) {
+                      sim.stopAutopilot(b.id);
+                    } else if (b.script) {
+                      sim.startAutopilot(b.script, b.id, (msg) => {
+                        const time = sim.missionTime;
+                        (window as any)._fullLogBuffer = (window as any)._fullLogBuffer || [];
+                        (window as any)._fullLogBuffer.push({ time, msg });
+                      });
+                    } else {
+                      window.open(`/?editor=${b.id}`, `Editor_${b.id}`, 'width=800,height=600,left=200,top=100');
+                    }
+                    forceRender(p => p + 1);
+                  }
+                },
+                {
+                  icon: <Terminal size={16} />,
+                  onClick: () => {
+                    window.open(`/?editor=${b.id}`, `Editor_${b.id}`, 'width=800,height=600,left=200,top=100');
+                  }
+                }
+              ];
+            })()}
+            options={[
+              ...(contextMenu.bodyId ? [
+                { 
+                  label: 'View Properties', 
+                  icon: <Info size={16} />, 
+                  onClick: () => onSelectBody(contextMenu.bodyId) 
+                },
+                { 
+                  label: sim.camera.followingId === contextMenu.bodyId ? 'Stop Following' : 'Follow Camera', 
+                  icon: <Camera size={16} />, 
+                  onClick: () => { sim.camera.followingId = sim.camera.followingId === contextMenu.bodyId ? null : contextMenu.bodyId; } 
+                },
+                { 
+                  label: 'Delete Object', 
+                  icon: <Trash2 size={16} />, 
+                  onClick: () => { sim.bodies = sim.bodies.filter(b => b.id !== contextMenu.bodyId); onSelectBody(null); },
+                  color: 'red'
+                }
+              ] : [
+                { 
+                  label: 'Reset Camera', 
+                  icon: <RotateCw size={16} />, 
+                  onClick: () => { sim.camera.x = 0; sim.camera.y = 0; sim.camera.zoom = 1; sim.camera.followingId = null; } 
+                },
+                { 
+                  label: 'Pause / Resume', 
+                  icon: <Play size={16} />, 
+                  onClick: () => { sim.paused = !sim.paused; } 
+                }
+              ])
+            ]}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

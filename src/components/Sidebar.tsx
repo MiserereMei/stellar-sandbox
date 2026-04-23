@@ -7,9 +7,10 @@ interface SidebarProps {
   sim: Simulation;
   selectedBodyId: string | null;
   onClose: () => void;
+  isMobile: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose, isMobile }) => {
   const [body, setBody] = useState<Body | null>(null);
   const [massUnit, setMassUnit] = useState<string>('Solar Masses');
   const [radiusUnit, setRadiusUnit] = useState<string>('Solar Radii');
@@ -92,11 +93,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ sim, selectedBodyId, onClose }
     <AnimatePresence>
       {body && (
         <motion.aside 
-          initial={{ x: 340, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 340, opacity: 0 }}
+          initial={isMobile ? { y: '100%', opacity: 0 } : { x: 340, opacity: 0 }}
+          animate={isMobile ? { y: 0, opacity: 1 } : { x: 0, opacity: 1 }}
+          exit={isMobile ? { y: '100%', opacity: 0 } : { x: 340, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          className="fixed top-4 right-4 bottom-20 w-[320px] bg-[#11141b]/25 backdrop-blur-2xl border border-white/10 flex flex-col overflow-hidden rounded-2xl shadow-2xl z-[60] p-6 gap-8 will-change-transform"
+          className={`fixed bg-[#11141b]/25 backdrop-blur-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl z-[60] will-change-transform ${
+            isMobile 
+              ? 'bottom-0 left-0 right-0 w-full h-[60vh] rounded-t-3xl p-4 pb-16' 
+              : 'top-4 right-4 bottom-20 w-[320px] rounded-2xl p-6'
+          }`}
         >
           <button 
             onClick={onClose}

@@ -43,16 +43,19 @@ export default function App() {
   const [creationPreset, setCreationPreset] = useState<BodyPreset>({ name: 'Planet', mass: 100, radius: 10, colorType: 'planet' });
   const [selectedBodyId, setSelectedBodyId] = useState<string | null>(null);
   const [activePopUp, setActivePopUp] = useState<ActivePopUp>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [visualSettings, setVisualSettings] = useState<VisualSettings>(() => {
     const saved = localStorage.getItem('stellar_visual_settings');
+    const mobileDetected = typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent));
+    
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         return {
-          warpEnabled: parsed.warpEnabled ?? true,
+          warpEnabled: parsed.warpEnabled ?? !mobileDetected,
           gridEnabled: parsed.gridEnabled ?? true,
           starsEnabled: parsed.starsEnabled ?? true,
-          trailsEnabled: parsed.trailsEnabled ?? true,
+          trailsEnabled: parsed.trailsEnabled ?? !mobileDetected,
           ttsEnabled: parsed.ttsEnabled ?? true,
           ttsAdaptiveRate: parsed.ttsAdaptiveRate ?? true,
         };
@@ -61,14 +64,24 @@ export default function App() {
       }
     }
     return {
-      warpEnabled: true,
+      warpEnabled: !mobileDetected,
       gridEnabled: true,
       starsEnabled: true,
-      trailsEnabled: true,
+      trailsEnabled: !mobileDetected,
       ttsEnabled: true,
       ttsAdaptiveRate: true,
     };
   });
+
+  // Mobile Detection logic
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent));
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const [engineSettings, setEngineSettings] = useState<EngineSettings>(() => {
     const saved = localStorage.getItem('stellar_engine_settings');
@@ -329,6 +342,7 @@ export default function App() {
             visualSettings={visualSettings}
             setActivePopUp={handleSetActivePopUp}
             isStreaming={streamingMode}
+            isMobile={isMobile}
           />
         </main>
 
@@ -369,6 +383,7 @@ export default function App() {
               setApiKey={handleSetApiKey}
               lastAction={lastAction}
               setLastAction={setLastAction}
+              isMobile={isMobile}
             />
 
             <AnimatePresence mode="wait">
@@ -378,6 +393,7 @@ export default function App() {
                   sim={sim}
                   selectedBodyId={selectedBodyId}
                   onClose={() => setSelectedBodyId(null)}
+                  isMobile={isMobile}
                 />
               ) : null}
             </AnimatePresence>
