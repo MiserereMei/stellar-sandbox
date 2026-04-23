@@ -1115,21 +1115,46 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         starLayer.tilePosition.set(0, 0);
         starLayer.tileScale.set(1);
 
-        // Grid
+        // Shepard Tone Logarithmic Grid (Persistent Coarse Layers - Adjusted Alpha)
         gridGraphics.clear();
-        const gridSize = 100 * zoom;
+        
+        // Target an ideal screen step of 150px for the "Middle" grid
+        const idealStep = 150 / zoom;
+        const logStep = Math.log10(idealStep);
+        const basePower = Math.floor(logStep);
 
-        if (gridSize >= 15) {
-          const offsetXGrid = (width / 2 - cx * zoom) % gridSize;
-          const offsetYGrid = (height / 2 - cy * zoom) % gridSize;
+        // Draw multiple layers to maintain context
+        for (let p = basePower - 1; p <= basePower + 2; p++) {
+          const worldGridStep = Math.pow(10, p);
+          const screenGridSize = worldGridStep * zoom;
+          
+          const diff = logStep - p; 
+          
+          let alpha = 0.02;
+          if (diff <= 0) {
+            // Persistent layer: Middle and Older grids stay at a stable, elegant alpha
+            alpha = 0.08; 
+          } else if (diff < 1) {
+            // New layer: Fades in as it approaches the middle scale
+            const fadeProgress = 1 - diff; 
+            alpha = 0.02 + (fadeProgress * 0.06);
+          }
 
-          for (let x = offsetXGrid; x < width; x += gridSize) {
-            gridGraphics.moveTo(x, 0).lineTo(x, height);
+          if (alpha > 0.001 && screenGridSize > 10) {
+            const offsetXGrid = (width / 2 - cx * zoom) % screenGridSize;
+            const offsetYGrid = (height / 2 - cy * zoom) % screenGridSize;
+
+            for (let x = offsetXGrid; x < width; x += screenGridSize) {
+              gridGraphics.moveTo(x, 0).lineTo(x, height);
+            }
+            for (let y = offsetYGrid; y < height; y += screenGridSize) {
+              gridGraphics.moveTo(0, y).lineTo(width, y);
+            }
+            
+            // Older (larger) grids are slightly thicker for hierarchy
+            const strokeWidth = p > logStep ? 1.5 : 1.0;
+            gridGraphics.stroke({ width: strokeWidth, color: "#ffffff", alpha: alpha });
           }
-          for (let y = offsetYGrid; y < height; y += gridSize) {
-            gridGraphics.moveTo(0, y).lineTo(width, y);
-          }
-          gridGraphics.stroke({ width: 1, color: "#ffffff", alpha: 0.05 });
         }
 
         // Transform: Using manual Screen-Space Projection to prevent GPU precision clipping
