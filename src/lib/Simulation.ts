@@ -1440,6 +1440,31 @@ export class Simulation {
           }
           smaller.mass = 0;
           if (this.camera.followingId === smaller.id) this.camera.followingId = bigger.id;
+
+          // CRITICAL: Sync back to WASM immediately if active
+          if (wasmActive) {
+            const biggerIdx = this.bodies.indexOf(bigger);
+            const smallerIdx = this.bodies.indexOf(smaller);
+            if (biggerIdx !== -1 && smallerIdx !== -1) {
+              const ptr = this.wasmPhysics.getBufferPtr();
+              const mem = (this.wasmPhysics as any).wasmMemory.buffer;
+              const view = new Float64Array(mem, ptr, this.bodies.length * 7);
+              
+              // Update bigger body in WASM
+              const bBase = biggerIdx * 7;
+              view[bBase + 0] = bigger.position.x;
+              view[bBase + 1] = bigger.position.y;
+              view[bBase + 2] = bigger.velocity.x;
+              view[bBase + 3] = bigger.velocity.y;
+              view[bBase + 4] = bigger.mass;
+              view[bBase + 5] = bigger.radius;
+
+              // Zero out smaller body in WASM
+              const sBase = smallerIdx * 7;
+              view[sBase + 4] = 0; // Set mass to 0 to effectively remove it from gravity
+            }
+          }
+
           if (b1.mass === 0) break;
         }
       }
