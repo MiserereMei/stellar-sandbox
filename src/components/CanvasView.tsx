@@ -921,30 +921,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       bgFilteredLayer.filters = [bgFilter];
       fgFilteredLayer.filters = [fgFilter];
 
-      // Create a star texture for TilingSprites
-      const createStarTexture = (size: number, density: number) => {
-        const graphics = new PIXI.Graphics();
-        for (let i = 0; i < density; i++) {
-          const x = Math.random() * size;
-          const y = Math.random() * size;
-          // Slightly coarser stars for better static visibility
-          const r = Math.random() * 0.8 + 0.2;
-          const alpha = 0.2 + Math.random() * 0.4;
-          graphics.circle(x, y, r).fill({ color: "#ffffff", alpha });
-        }
-        return app!.renderer.generateTexture(graphics);
-      };
-
-      const starTexture1 = createStarTexture(1024, 120); // Static backdrop
-
-      const starsLayer = new PIXI.Container();
-      const starLayer = new PIXI.TilingSprite({
-        texture: starTexture1,
-        width: 2000,
-        height: 2000,
-      });
-      starsLayer.addChild(starLayer);
-
+      const starsGraphics = new PIXI.Graphics();
       const gridGraphics = new PIXI.Graphics();
       const worldBgContainer = new PIXI.Container();
       const worldFgContainer = new PIXI.Container();
@@ -965,7 +942,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       const labelsContainer = new PIXI.Container();
       const uiGraphics = new PIXI.Graphics();
 
-      bgFilteredLayer.addChild(starsLayer, gridGraphics, worldBgContainer);
+      bgFilteredLayer.addChild(starsGraphics, gridGraphics, worldBgContainer);
       fgFilteredLayer.addChild(worldFgContainer);
       unfilteredLayer.addChild(labelsContainer, uiGraphics);
 
@@ -983,7 +960,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         bgFilter.enabled = settingsRef.current.warpEnabled;
         fgFilter.enabled = settingsRef.current.warpEnabled;
         gridGraphics.visible = settingsRef.current.gridEnabled;
-        starsLayer.visible = settingsRef.current.starsEnabled;
+        starsGraphics.visible = settingsRef.current.starsEnabled;
         backgroundTrailsGraphics.visible = settingsRef.current.trailsEnabled;
         foregroundTrailsGraphics.visible = settingsRef.current.trailsEnabled;
 
@@ -1108,36 +1085,99 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           }
         }
 
-        // Static stars: just match screen size
-        starLayer.width = width;
-        starLayer.height = height;
-        starLayer.position.set(0, 0);
-        starLayer.tilePosition.set(0, 0);
-        starLayer.tileScale.set(1);
 
-        // Shepard Tone Logarithmic Grid (Persistent Coarse Layers - Adjusted Alpha)
-        gridGraphics.clear();
-        
-        // Target an ideal screen step of 150px for the "Middle" grid
         const idealStep = 150 / zoom;
-        const logStep = Math.log10(idealStep);
+        // 10x Shallower: Increase log sensitivity so we cross layers 10x faster
+        const logStep = Math.log10(idealStep) * 10;
         const basePower = Math.floor(logStep);
 
-        // Draw multiple layers to maintain context
-        for (let p = basePower - 1; p <= basePower + 2; p++) {
+        starsGraphics.clear();
+
+        // FRACTAL STARS: Maintain constant density with a dense, multi-layered hierarchy
+        const hash = (x: number, y: number, p: number) => {
+          const val = Math.sin(x * 12.9898 + y * 78.233 + p * 37.719) * 43758.5453123;
+          return val - Math.floor(val);
+        };
+
+        // Ultra-Smooth Overlap: Loop through more layers with a wider Gaussian spread
+        for (let p = basePower - 6; p <= basePower + 6; p++) {
+          const worldGridStep = Math.pow(10, p / 10);
+          const screenGridSize = worldGridStep * zoom;
+          
+          // Wider Gaussian Fade (Sigma 2.2) for silkier transitions
+          const dist = Math.abs(logStep - p);
+          const sigma = 2.2;
+          const alpha = Math.exp(-Math.pow(dist, 2) / (2 * Math.pow(sigma, 2)));
+
+          if (alpha > 0.01 && screenGridSize > 1) {
+            let offsetX = (width / 2 - cx * zoom) % screenGridSize;
+            let offsetY = (height / 2 - cy * zoom) % screenGridSize;
+            
+            if (offsetX < 0) offsetX += screenGridSize;
+            if (offsetY < 0) offsetY += screenGridSize;
+
+            // Determine the starting cell ID in world space for this screen-view
+            const startIdX = Math.floor((cx * zoom - width / 2) / screenGridSize);
+            const startIdY = Math.floor((cy * zoom - height / 2) / screenGridSize);
+
+            let ix = 0;
+            for (let x = offsetX - screenGridSize; x < width + screenGridSize; x += screenGridSize) {
+              let iy = 0;
+              for (let y = offsetY - screenGridSize; y < height + screenGridSize; y += screenGridSize) {
+                const cellIdX = startIdX + ix;
+                const cellIdY = startIdY + iy;
+                
+                // Stable random offsets within the cell
+                const rx = hash(cellIdX, cellIdY, p);
+                const ry = hash(cellIdX, cellIdY, p + 10);
+                
+                const sx = x + rx * screenGridSize;
+                const sy = y + ry * screenGridSize;
+
+                if (sx >= 0 && sx <= width && sy >= 0 && sy <= height) {
+                  // Fake Doppler Effect: Blue tint for detailed/new, Red tint for coarse/old
+                  // Using p relative to basePower to determine shift
+                  const shift = p - basePower;
+                  let color = 0xffffff;
+                  if (shift < 0) color = 0xe0f0ff;      // Blueshift (Cool/New)
+                  else if (shift > 0) color = 0xffe0d0; // Redshift (Warm/Old)
+                  
+                  // Asymmetric Thinning: 
+                  // Coarse layers (p > logStep) just fade out at full size during zoom-in.
+                  // Fine layers (p < logStep) thin out as they fade during zoom-out.
+                  const radius = (p > logStep) ? 2.0 : (0.5 + (1.5 * alpha));
+
+                  starsGraphics.rect(sx - radius, sy - radius, radius * 2, radius * 2).fill({ color, alpha: alpha * 0.3 });
+                }
+                iy++;
+              }
+              ix++;
+            }
+          }
+        }
+
+        // Shepard Tone Logarithmic Grid (Restore standard 10^p hierarchy)
+        gridGraphics.clear();
+        
+        const gridLogStep = Math.log10(75 / zoom);
+        const gridBasePower = Math.floor(gridLogStep);
+
+        // Draw multiple layers for the grid
+        for (let p = gridBasePower - 1; p <= gridBasePower + 2; p++) {
           const worldGridStep = Math.pow(10, p);
           const screenGridSize = worldGridStep * zoom;
           
-          const diff = logStep - p; 
-          
+          const dist = gridLogStep - p; 
           let alpha = 0.02;
-          if (diff <= 0) {
-            // Persistent layer: Middle and Older grids stay at a stable, elegant alpha
+
+          if (dist <= 0) {
+            // Older/Persistent layers stay at stable alpha
             alpha = 0.08; 
-          } else if (diff < 1) {
-            // New layer: Fades in as it approaches the middle scale
-            const fadeProgress = 1 - diff; 
-            alpha = 0.02 + (fadeProgress * 0.06);
+          } else if (dist < 0.2) {
+            // Ultra-Fast Birth: Very tight range (0.2) and sqrt curve for near-instant pop-in
+            const t = 1 - (dist / 0.2); // 0 to 1
+            const smoothT = Math.pow(t, 0.5); 
+            alpha = 0.02 + (smoothT * 0.06);
           }
 
           if (alpha > 0.001 && screenGridSize > 10) {
@@ -1151,8 +1191,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
               gridGraphics.moveTo(0, y).lineTo(width, y);
             }
             
-            // Older (larger) grids are slightly thicker for hierarchy
-            const strokeWidth = p > logStep ? 1.5 : 1.0;
+            const strokeWidth = p > gridLogStep ? 1.5 : 1.0;
             gridGraphics.stroke({ width: strokeWidth, color: "#ffffff", alpha: alpha });
           }
         }
