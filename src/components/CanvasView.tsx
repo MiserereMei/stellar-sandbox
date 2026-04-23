@@ -2224,7 +2224,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       />
 
       {/* DOM Hover UI */}
-      {hoveredRocketId && (() => {
+      {hoveredRocketId && !contextMenu && (() => {
         const b = sim.bodies.find(b => b.id === hoveredRocketId) as any;
         if (!b) return null;
         return (
