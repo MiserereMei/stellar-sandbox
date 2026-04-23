@@ -56,6 +56,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [jumpPrecision, setJumpPrecision] = useState<'fast' | 'high' | 'ultra'>('high');
   const [wasmTick, setWasmTick] = useState(0);
   const [addMenuExpanded, setAddMenuExpanded] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
 
   const handleDateClick = (e: React.MouseEvent) => {
     if (isJumping) return;
@@ -81,6 +82,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   };
 
   const togglePopUp = (id: Exclude<ActivePopUp, null>, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (activePopUp === id) {
       setActivePopUp(null);
     } else {
@@ -241,7 +244,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     return (
       <button
-        onPointerDown={onClick}
+        onClick={onClick}
         onContextMenu={onContextMenu}
         className={`${isMobile ? 'w-12 h-12' : 'w-10 h-10'} shrink-0 flex items-center justify-center rounded-xl border transition-all duration-100 outline-none aspect-square touch-pan-x select-none ${colors[color]}`}
         title={title}
@@ -253,7 +256,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <>
-      <div 
+      <div
         className={`fixed bottom-0 left-0 right-0 bg-[#020508]/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-between z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.6)] selection:bg-blue-500/30 ${isMobile ? 'h-auto pt-4 px-0' : 'h-16 px-3'}`}
         style={isMobile ? { paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' } : undefined}
       >
@@ -264,7 +267,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <div className="flex items-center gap-1.5">
               <DockButton
                 active={toolMode === 'select'}
-                onClick={() => { setToolMode('select'); setActivePopUp(null); }}
+                onClick={() => {
+                  setToolMode('select');
+                  setActivePopUp(null);
+                  sim.rulerStartPoint = null;
+                  sim.rulerEndPoint = null;
+                }}
                 title="Analyze & Pan"
               >
                 <MousePointer2 size={18} />
@@ -443,8 +451,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               bottom: '80px'
             } : undefined}
             initial={isMobile ? { y: '100%', height: '70vh' } : { opacity: 0, y: 10 }}
-            animate={isMobile 
-              ? { y: 0, height: addMenuExpanded ? '100vh' : '70vh' } 
+            animate={isMobile
+              ? { y: 0, height: addMenuExpanded ? '100vh' : '70vh' }
               : { opacity: 1, y: 0 }
             }
             exit={isMobile ? { y: '100%', height: '70vh' } : { opacity: 0, y: 10 }}
@@ -460,11 +468,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 else if (info.offset.y > -50 && addMenuExpanded) setAddMenuExpanded(false);
               }
             }}
-            className={`fixed bg-[#0c1016]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col z-[100] overflow-hidden will-change-transform ${
-              isMobile 
-                ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t' 
+            onPointerDown={(e) => e.stopPropagation()}
+            className={`fixed bg-[#0c1016]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col z-[100] pointer-events-auto overflow-hidden will-change-transform ${isMobile
+                ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t'
                 : 'w-[500px] rounded-2xl border'
-            }`}
+              }`}
           >
             {/* Mobile Handle */}
             {isMobile && (
@@ -474,17 +482,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             )}
 
             {/* Unified Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
-                <Plus size={16} className="text-blue-400" />
-                <span>Construction Core</span>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <Plus size={18} className="text-blue-400" />
+                <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">Construction Core</span>
               </div>
               {!isMobile && (
                 <button
                   onClick={() => setActivePopUp(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
                 >
-                  <X size={16} />
+                  <X size={20} />
                 </button>
               )}
             </div>
@@ -658,9 +666,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         if (sim.currentScript) {
                           // Start the script in background without showing the editor
                           sim.startAutopilot(sim.currentScript, (sim.vehicle || sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket'))?.id, (msg) => {
-                             // Broadcast to logs if needed
-                             (window as any)._logBuffer = (window as any)._logBuffer || [];
-                             (window as any)._logBuffer.push({ time: sim.missionTime, msg });
+                            // Broadcast to logs if needed
+                            (window as any)._logBuffer = (window as any)._logBuffer || [];
+                            (window as any)._logBuffer.push({ time: sim.missionTime, msg });
                           });
                         }
                       }}
@@ -761,28 +769,47 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         {activePopUp === 'jump' && (
           <motion.div
-            style={{
-              left: anchors['jump']?.left,
+            style={!isMobile && anchors['jump'] ? {
+              left: anchors['jump'].left,
               bottom: '80px',
-              transform: anchors['jump']?.side === 'right' ? 'translateX(-100%)' : 'none'
+              transform: anchors['jump'].side === 'right' ? 'translateX(-100%)' : 'none'
+            } : undefined}
+            initial={isMobile ? { y: '100%', height: 'auto' } : { opacity: 0, y: 10 }}
+            animate={isMobile ? { y: 0, height: 'auto' } : { opacity: 1, y: 0 }}
+            exit={isMobile ? { y: '100%', height: 'auto' } : { opacity: 0, y: 10 }}
+            transition={{ type: 'spring', damping: 40, stiffness: 200 }}
+            drag={isMobile ? "y" : false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={isMobile ? { top: 0.1, bottom: 1 } : 0.5}
+            dragMomentum={false}
+            onDragEnd={(_, info) => {
+              if (isMobile && info.offset.y > 100) setActivePopUp(null);
             }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className={`fixed bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-[60] flex flex-col w-72 overflow-hidden will-change-transform`}
+            onPointerDown={(e) => e.stopPropagation()}
+            className={`fixed bg-[#0c1016]/95 backdrop-blur-3xl border-white/10 shadow-2xl z-[60] flex flex-col overflow-hidden will-change-transform pointer-events-auto ${isMobile ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t pb-8' : 'w-72 rounded-2xl border'
+              }`}
           >
-            {/* Unified Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
-                <FastForward size={13} className="text-blue-400" />
-                <span>TEMPORAL JUMP</span>
+            {/* Mobile Handle */}
+            {isMobile && (
+              <div className="w-full flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+                <div className="w-12 h-1.5 bg-white/20 rounded-full" />
               </div>
-              <button
-                onClick={() => setActivePopUp(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
+            )}
+
+            {/* Unified Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <FastForward size={18} className="text-blue-400" />
+                <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">Temporal Jump</span>
+              </div>
+              {!isMobile && (
+                <button
+                  onClick={() => setActivePopUp(null)}
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              )}
             </div>
 
             <div className="p-4 flex flex-col gap-4">
@@ -840,7 +867,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       <AnimatePresence>
         {activePopUp === 'settings' && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
+          <div className={`fixed z-[100] ${isMobile ? 'inset-0' : 'inset-0 flex items-center justify-center pointer-events-none'}`}>
             {/* Dark overlay backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -850,32 +877,59 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto"
             />
 
-            {/* Modal Box */}
+            {/* Modal Box / Bottom Sheet */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl w-[800px] min-h-[600px] flex flex-col pointer-events-auto overflow-hidden will-change-transform"
+              initial={isMobile ? { y: '100%', height: '70vh' } : { opacity: 0, scale: 0.95, y: 10 }}
+              animate={isMobile 
+                ? { y: 0, height: settingsExpanded ? '100vh' : '70vh' } 
+                : { opacity: 1, scale: 1, y: 0 }
+              }
+              exit={isMobile ? { y: '100%', height: '70vh' } : { opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", damping: 40, stiffness: 200 }}
+              drag={isMobile ? "y" : false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={isMobile ? { top: settingsExpanded ? 0 : 0.2, bottom: 1 } : 0}
+              dragMomentum={false}
+              onDragEnd={(_, info) => {
+                if (isMobile) {
+                  if (info.offset.y > 100) setActivePopUp(null);
+                  else if (info.offset.y < -100) setSettingsExpanded(true);
+                  else if (info.offset.y > -50 && settingsExpanded) setSettingsExpanded(false);
+                }
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className={`fixed bg-[#0c1016]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col z-[100] pointer-events-auto overflow-hidden will-change-transform ${isMobile
+                  ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t'
+                  : 'relative w-[800px] min-h-[600px] rounded-2xl border pointer-events-auto'
+                }`}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
-                  <Settings size={13} className="text-blue-400" />
-                  <span>SYSTEM SETTINGS</span>
+              {/* Mobile Handle */}
+              {isMobile && (
+                <div className="w-full flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+                  <div className="w-12 h-1.5 bg-white/20 rounded-full" />
                 </div>
-                <button
-                  onClick={() => setActivePopUp(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={16} />
-                </button>
+              )}
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <Settings size={18} className="text-blue-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">System Settings</span>
+                </div>
+                {!isMobile && (
+                  <button
+                    onClick={() => setActivePopUp(null)}
+                    className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
               </div>
 
               {/* Body */}
-              <div className="flex flex-1 min-h-0">
-                {/* Left Sidebar Tabs */}
-                <div className="w-[200px] border-r border-white/10 bg-black/20 p-2 flex flex-col gap-1">
+              <div className={`flex flex-1 min-h-0 ${isMobile ? 'flex-col' : 'flex-row'}`}>
+
+                {/* Tabs Area */}
+                <div className={`${isMobile ? 'w-full flex-row overflow-x-auto no-scrollbar border-b p-2' : 'w-48 flex-col border-r p-3'} border-white/10 bg-black/20 flex gap-1 shrink-0`}>
                   {[
                     { id: 'visual', label: 'Visuals', icon: <Layers size={14} /> },
                     { id: 'audio', label: 'Audio', icon: <Volume2 size={14} /> },
@@ -886,19 +940,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     <button
                       key={tab.id}
                       onClick={() => setSettingsTab(tab.id as any)}
-                      className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3 py-3 rounded-lg transition-all text-left ${settingsTab === tab.id
-                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] uppercase font-bold tracking-widest transition-all shrink-0 ${settingsTab === tab.id
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                         }`}
                     >
                       {tab.icon}
-                      {tab.label}
+                      <span className="truncate">{tab.label}</span>
                     </button>
                   ))}
                 </div>
 
                 {/* Right Content Area */}
-                <div className="flex-1 p-6 overflow-y-auto">
+                <div className="flex-1 p-6 overflow-y-auto" style={isMobile ? { paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' } : undefined}>
                   {settingsTab === 'visual' && (
                     <div className="flex flex-col gap-2">
                       <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Graphics Configuration</div>
@@ -985,14 +1039,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   )}
                   {settingsTab === 'engine' && (
                     <div className="flex flex-col gap-4">
-                      
+
                       <div className="flex flex-col gap-3 pt-2 border-t border-white/5">
                         <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Physics Engine</div>
-                        
+
                         {/* Mode Selector */}
                         <div className="flex flex-col gap-1">
                           <span className="text-[9px] text-gray-400 uppercase tracking-widest px-1">Calculation Mode</span>
-                          <select 
+                          <select
                             value={engineSettings.physicsMode}
                             onChange={(e) => {
                               const mode = e.target.value as any;
@@ -1018,7 +1072,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                               <span>Max Speed</span>
                               <span>Ultra Precision</span>
                             </div>
-                            <input 
+                            <input
                               type="range"
                               min="0"
                               max="4"
@@ -1053,7 +1107,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                           <div className="grid grid-cols-2 gap-2 p-3 rounded-xl border border-white/5 bg-black/40">
                             <div className="flex flex-col gap-1">
                               <span className="text-[9px] text-gray-500 uppercase font-bold tracking-tight">Precision (Step)</span>
-                              <input 
+                              <input
                                 type="number"
                                 step="0.001"
                                 defaultValue={sim.physicsPrecision}
@@ -1069,7 +1123,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             </div>
                             <div className="flex flex-col gap-1">
                               <span className="text-[9px] text-gray-500 uppercase font-bold tracking-tight">Max Substeps</span>
-                              <input 
+                              <input
                                 type="number"
                                 defaultValue={sim.maxSubsteps}
                                 onBlur={(e) => {
@@ -1188,10 +1242,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         onInjectScript={(script, targetId) => {
           sim.currentScript = script;
           const finalTargetId = targetId || (sim.vehicle || sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket'))?.id;
-          
+
           sim.startAutopilot(script, finalTargetId, (msg) => {
-             (window as any)._logBuffer = (window as any)._logBuffer || [];
-             (window as any)._logBuffer.push({ time: sim.missionTime, msg });
+            (window as any)._logBuffer = (window as any)._logBuffer || [];
+            (window as any)._logBuffer.push({ time: sim.missionTime, msg });
           });
         }}
       />

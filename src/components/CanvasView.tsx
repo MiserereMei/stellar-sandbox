@@ -292,7 +292,11 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     iState.isDraggingVector = false;
     iState.dragStartWorldPos = null;
     iState.orbitParentId = null;
-    sim.rulerEndPoint = null;
+    
+    if (toolMode !== "ruler") {
+      sim.rulerStartPoint = null;
+      sim.rulerEndPoint = null;
+    }
   }, [toolMode, sim]);
 
   // Sync previewBody instantly when creationPreset or addMode changes
@@ -422,23 +426,34 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       if (toolMode === "ruler") {
         if (!sim.rulerStartPoint) {
           sim.rulerStartPoint = wx;
+          if (navigator.vibrate) navigator.vibrate(20);
         } else {
           // Check if clicking same spot to cancel/exit
           const dx = (wx.x - sim.rulerStartPoint.x) * sim.camera.zoom;
           const dy = (wx.y - sim.rulerStartPoint.y) * sim.camera.zoom;
-          if (Math.sqrt(dx * dx + dy * dy) < 10) {
+          if (Math.sqrt(dx * dx + dy * dy) < 15) {
             setToolMode("select");
             sim.rulerStartPoint = null;
             sim.rulerEndPoint = null;
+            (iState as any).rulerAnim = null;
+            if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
             return;
           }
 
           if (!sim.rulerEndPoint) {
-            sim.rulerEndPoint = wx;
+            // Start stretching animation instead of immediate lock
+            (iState as any).rulerAnim = {
+              start: { ...sim.rulerStartPoint },
+              target: { ...wx },
+              progress: 0,
+              startTime: performance.now()
+            };
           } else {
-            // 3rd click: clear previous and start a NEW one at the current spot
+            // 3rd click: clear and start new
             sim.rulerEndPoint = null;
             sim.rulerStartPoint = wx;
+            (iState as any).rulerAnim = null;
+            if (navigator.vibrate) navigator.vibrate(20);
           }
         }
         return;
@@ -2076,23 +2091,72 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         syncTransform(labelsContainer);
 
         if (sim.rulerStartPoint) {
+          const iState = interactionState.current as any;
+          const anim = iState.rulerAnim;
+          let end = sim.rulerEndPoint || sim.mouseWorldPos;
+          
+          if (anim) {
+            const duration = 400; // ms
+            const elapsed = performance.now() - anim.startTime;
+            const progress = Math.min(1, elapsed / duration);
+            
+            // Linear interpolation for stretching effect
+            end = {
+              x: anim.start.x + (anim.target.x - anim.start.x) * progress,
+              y: anim.start.y + (anim.target.y - anim.start.y) * progress
+            };
+
+            // Periodic Haptic pulses while stretching
+            const lastHapticStep = Math.floor(anim.progress * 10);
+            const currentHapticStep = Math.floor(progress * 10);
+            if (currentHapticStep > lastHapticStep) {
+              if (navigator.vibrate) navigator.vibrate(10);
+            }
+
+            anim.progress = progress;
+
+            if (progress >= 1) {
+              sim.rulerEndPoint = anim.target;
+              iState.rulerAnim = null;
+              if (navigator.vibrate) navigator.vibrate(40); // Final thud
+            }
+          }
+
           const start = sim.rulerStartPoint;
-          const isFinished = !!sim.rulerEndPoint;
-          const end = isFinished ? sim.rulerEndPoint! : sim.mouseWorldPos;
+          const isFinished = !!sim.rulerEndPoint && !anim;
           const dx = end.x - start.x;
           const dy = end.y - start.y;
           const distWorld = Math.sqrt(dx * dx + dy * dy);
           const distKm = distWorld * 6371;
+
+          const pulse = Math.sin(performance.now() / 150) * 0.2 + 0.8;
+          const pulseColor = isFinished ? 0xfacc15 : 0xffffff;
 
           // Draw the line and distance (either fixed or dynamic to mouse)
           uiGraphics
             .moveTo((start.x - cx) * zoom, (start.y - cy) * zoom)
             .lineTo((end.x - cx) * zoom, (end.y - cy) * zoom);
           uiGraphics.stroke({
-            width: 2,
-            color: "#facc15",
-            alpha: 0.8,
+            width: isFinished ? 2 : 2.5 * pulse,
+            color: pulseColor,
+            alpha: 0.8 * pulse,
           });
+
+          // Draw endpoints with glow
+          uiGraphics
+            .circle((start.x - cx) * zoom, (start.y - cy) * zoom, 4 * pulse)
+            .fill({ color: pulseColor, alpha: 0.9 });
+          
+          if (isFinished) {
+            uiGraphics
+              .circle((end.x - cx) * zoom, (end.y - cy) * zoom, 4)
+              .fill({ color: pulseColor, alpha: 0.9 });
+          } else {
+            // Animating cursor point
+            uiGraphics
+              .circle((end.x - cx) * zoom, (end.y - cy) * zoom, 6 * pulse)
+              .stroke({ color: 0xffffff, width: 2, alpha: 0.5 * pulse });
+          }
 
           // Ruler text
           let distLabel = `${distKm.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
@@ -2123,15 +2187,6 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           );
           rtxt.scale.set(1);
           activeLabels.add(rulerTextId);
-
-          // Draw endpoints
-          uiGraphics
-            .circle((start.x - cx) * zoom, (start.y - cy) * zoom, 4)
-            .fill({ color: "#facc15" });
-
-          uiGraphics
-            .circle((end.x - cx) * zoom, (end.y - cy) * zoom, 4)
-            .fill({ color: "#facc15" });
         }
 
         if (sim.previewVelocityVector) {

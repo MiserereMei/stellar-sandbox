@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Simulation } from '../lib/Simulation';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Layers, 
-  Search, 
-  X, 
-  Rocket, 
-  Sun, 
-  Globe, 
-  Circle, 
-  Play, 
+import {
+  Layers,
+  Search,
+  X,
+  Rocket,
+  Sun,
+  Globe,
+  Circle,
+  Play,
   Square,
   Crosshair,
   ChevronDown,
@@ -25,10 +25,10 @@ interface OutlinerProps {
   isMobile: boolean;
 }
 
-export const Outliner: React.FC<OutlinerProps> = ({ 
-  sim, 
-  isVisible, 
-  onClose, 
+export const Outliner: React.FC<OutlinerProps> = ({
+  sim,
+  isVisible,
+  onClose,
   onSelectBody,
   selectedBodyId,
   isMobile
@@ -64,7 +64,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
 
       const isRocket = (b as any).type?.includes('rocket');
       const isMassive = sim.isBodyBlackHole(b) || sim.isStar(b) || b.mass > 10000;
-      
+
       if (isRocket) groups['rocket'].push(b);
       else if (isMassive) groups['star'].push(b);
       else groups['planet'].push(b);
@@ -89,18 +89,17 @@ export const Outliner: React.FC<OutlinerProps> = ({
     const isActive = !!b.isAutopilotActive;
 
     return (
-      <div 
+      <div
         key={b.id}
-        className={`group flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer border ${
-          isSelected 
-            ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' 
-            : 'hover:bg-white/5 border-transparent text-gray-400 hover:text-white'
-        }`}
+        className={`group flex items-center justify-between px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${isSelected
+          ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
+          : 'hover:bg-white/5 border-transparent text-gray-400 hover:text-white'
+          }`}
         onClick={() => onSelectBody(b.id)}
       >
         <div className="flex items-center gap-3 overflow-hidden">
-          <div 
-            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-[0_0_8px_rgba(255,255,255,0.3)]" 
+          <div
+            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-[0_0_8px_rgba(255,255,255,0.3)]"
             style={{ backgroundColor: b.type === 'blackhole' ? '#000' : (b as any).color || '#fff' }}
           />
           <span className="text-[12px] font-medium truncate tracking-tight">{b.name}</span>
@@ -114,14 +113,13 @@ export const Outliner: React.FC<OutlinerProps> = ({
                 if (isActive) {
                   sim.stopAutopilot(b.id);
                 } else if (b.script) {
-                  sim.startAutopilot(b.script, b.id, () => {});
+                  sim.startAutopilot(b.script, b.id, () => { });
                 } else {
                   window.open(`/?editor=${b.id}`, `Editor_${b.id}`, 'width=800,height=600');
                 }
               }}
-              className={`p-2 rounded-lg transition-colors ${
-                isActive ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'
-              }`}
+              className={`p-2 rounded-lg transition-colors ${isActive ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'
+                }`}
             >
               {isActive ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
             </button>
@@ -146,8 +144,8 @@ export const Outliner: React.FC<OutlinerProps> = ({
       {isVisible && (
         <motion.div
           initial={isMobile ? { y: '100%', height: '70vh' } : { x: -340 }}
-          animate={isMobile 
-            ? { y: 0, height: isExpanded ? '100vh' : '70vh' } 
+          animate={isMobile
+            ? { y: 0, height: isExpanded ? '100vh' : '70vh' }
             : { x: 0 }
           }
           exit={isMobile ? { y: '100%', height: '70vh' } : { x: -340 }}
@@ -163,12 +161,11 @@ export const Outliner: React.FC<OutlinerProps> = ({
               else if (info.offset.y > -50 && isExpanded) setIsExpanded(false);
             }
           }}
-          className={`fixed bg-[#11141b]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col z-[100] overflow-hidden will-change-transform ${
-            isMobile 
-              ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t' 
-              : 'left-4 top-4 bottom-20 w-80 rounded-2xl border'
-          }`}
-          style={isMobile ? { paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' } : undefined}
+          className={`fixed bg-[#11141b]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col z-[120] pointer-events-auto overflow-hidden will-change-transform ${isMobile
+            ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t'
+            : 'left-4 top-4 bottom-20 w-80 rounded-2xl border'
+            }`}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           {/* Mobile Handle */}
           {isMobile && (
@@ -178,13 +175,13 @@ export const Outliner: React.FC<OutlinerProps> = ({
           )}
 
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
             <div className="flex items-center gap-2">
               <Layers size={18} className="text-blue-400" />
               <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">Simulation Outliner</span>
             </div>
             {!isMobile && (
-              <button 
+              <button
                 onClick={onClose}
                 className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
               >
@@ -194,36 +191,36 @@ export const Outliner: React.FC<OutlinerProps> = ({
           </div>
 
           {/* Search */}
-          <div className="p-3">
+          <div className="p-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={14} />
-              <input 
+              <input
                 type="text"
                 placeholder="Search entities..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-black/40 border border-white/5 rounded-xl py-2.5 pl-9 pr-4 text-[12px] font-mono text-white outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-600"
+                className="w-full bg-black/40 border border-white/5 rounded-xl py-2 pl-9 pr-4 text-[12px] font-mono text-white outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-600"
               />
             </div>
           </div>
 
           {/* List Container */}
-          <div className="flex-1 overflow-y-auto no-scrollbar px-2 pb-4 space-y-4">
+          <div className="flex-1 overflow-y-auto no-scrollbar px-2 space-y-2">
             {(Object.entries(filteredGroups) as [string, any[]][]).map(([group, members]) => {
               if (members.length === 0 && search) return null;
               const isExpanded = expandedGroups[group];
-              const label = group === 'star' ? 'Stars & Massive' 
-                          : group === 'planet' ? 'Celestial Bodies' 
-                          : group === 'rocket' ? 'Mission Fleet' 
-                          : 'Others';
-              const Icon = group === 'star' ? Sun 
-                         : group === 'planet' ? Globe 
-                         : group === 'rocket' ? Rocket 
-                         : Circle;
+              const label = group === 'star' ? 'Stars & Massive'
+                : group === 'planet' ? 'Celestial Bodies'
+                  : group === 'rocket' ? 'Mission Fleet'
+                    : 'Others';
+              const Icon = group === 'star' ? Sun
+                : group === 'planet' ? Globe
+                  : group === 'rocket' ? Rocket
+                    : Circle;
 
               return (
                 <div key={group} className="space-y-1">
-                  <button 
+                  <button
                     onClick={() => toggleGroup(group)}
                     className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-white/5 rounded-lg transition-colors group"
                   >
@@ -259,7 +256,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
           </div>
 
           {/* Footer Stats */}
-          <div className="px-4 py-3 bg-white/5 border-t border-white/5">
+          <div className="px-3 py-2 bg-white/5 border-t border-white/5">
             <div className="flex justify-between items-center text-[9px] font-bold text-gray-600 uppercase tracking-tight">
               <span>Total Entities</span>
               <span className="text-blue-400 font-mono">{bodies.length}</span>

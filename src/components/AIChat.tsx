@@ -522,7 +522,7 @@ ${FC_API_DOC}
     } catch (err: any) {
       console.error(err);
       setStreamingMessage(null);
-      
+
       // Attempt to parse deep error messages from the Gemini API
       let displayError = err.message || 'An unexpected error occurred.';
       let delaySeconds = 0;
@@ -537,7 +537,7 @@ ${FC_API_DOC}
               try {
                 const res = findField(JSON.parse(obj[key]), field);
                 if (res) return res;
-              } catch (e) {}
+              } catch (e) { }
             }
             const res = findField(obj[key], field);
             if (res) return res;
@@ -545,8 +545,8 @@ ${FC_API_DOC}
           return null;
         };
 
-        const errorObj = typeof err.message === 'string' && err.message.startsWith('{') 
-          ? JSON.parse(err.message) 
+        const errorObj = typeof err.message === 'string' && err.message.startsWith('{')
+          ? JSON.parse(err.message)
           : err;
 
         // Try to find retryDelay anywhere in the error structure
@@ -579,18 +579,18 @@ ${FC_API_DOC}
       }
 
       const errStr = JSON.stringify(err) + displayError;
-      
+
       // Roll back: remove last user message from UI and history, restore to input
       setMessages(prev => prev.slice(0, -1));
       historyRef.current = historyRef.current.slice(0, -1);
       setInput(userText);
-      
+
       if (delaySeconds > 0) {
         setRetryCountdown(delaySeconds);
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          text: `⚠ Quota exceeded. Retrying enabled in ${delaySeconds}s...`, 
-          isError: true 
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          text: `⚠ Quota exceeded. Retrying enabled in ${delaySeconds}s...`,
+          isError: true
         }]);
       } else {
         const isUnavailable = errStr.includes('503') || errStr.includes('UNAVAILABLE');
@@ -620,45 +620,69 @@ ${FC_API_DOC}
     set_camera: 'Camera updated',
   };
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
   return (
     <AnimatePresence>
       {show && (
         <motion.div
-          style={anchorRect ? {
+          style={anchorRect && !isMobile ? {
             left: anchorRect.side === 'left' ? anchorRect.left : undefined,
             right: anchorRect.side === 'right' ? (window.innerWidth - anchorRect.left) : undefined,
             bottom: '80px',
           } : undefined}
-          initial={{ opacity: 0, y: 20, x: anchorRect ? 0 : '-50%' }}
-          animate={{ opacity: 1, y: 0, x: anchorRect ? 0 : '-50%' }}
-          exit={{ opacity: 0, y: 20, x: anchorRect ? 0 : '-50%' }}
-          className={`fixed ${!anchorRect ? 'bottom-[100px] left-1/2' : ''} w-[380px] pointer-events-none z-[100] will-change-transform`}
+          initial={isMobile ? { y: '100%', height: '60vh' } : { opacity: 0, y: 20, x: anchorRect ? 0 : '-50%' }}
+          animate={isMobile
+            ? { y: 0, height: '60vh' }
+            : { opacity: 1, y: 0, x: anchorRect ? 0 : '-50%' }
+          }
+          exit={isMobile ? { y: '100%', height: '60vh' } : { opacity: 0, y: 20, x: anchorRect ? 0 : '-50%' }}
+          transition={{ type: 'spring', damping: 40, stiffness: 200 }}
+          drag={isMobile ? "y" : false}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={isMobile ? { top: 0.1, bottom: 1 } : 0.5}
+          dragMomentum={false}
+          onDragEnd={(_, info) => {
+            if (isMobile && info.offset.y > 100) onClose();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className={`fixed ${isMobile ? 'left-0 right-0 bottom-0 rounded-t-3xl border-t' : (!anchorRect ? 'bottom-[100px] left-1/2' : '')} ${isMobile ? '' : 'w-[380px]'} pointer-events-auto z-[100] will-change-transform bg-[#11141b]/95 backdrop-blur-3xl border-white/10 shadow-2xl flex flex-col overflow-hidden`}
         >
-          <div className="bg-[#11141b]/60 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden" style={{ maxHeight: '520px' }}>
+          {/* Mobile Handle */}
+          {isMobile && (
+            <div className="w-full flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+              <div className="w-12 h-1.5 bg-white/20 rounded-full" />
+            </div>
+          )}
 
+          <div className="flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[2px] text-gray-500 font-bold">
-                <Sparkles size={13} className="text-purple-400" />
-                <span>AI COORDINATOR</span>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-purple-400" />
+                <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">AI Coordinator</span>
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    setMessages([]);
-                    historyRef.current = [];
-                  }}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white transition-colors"
-                  title="Clear Chat & Context"
-                >
-                  <Trash2 size={14} />
-                </button>
-                <button
-                  onClick={onClose}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={16} />
-                </button>
+                {!isMobile && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setMessages([]);
+                        historyRef.current = [];
+                      }}
+                      className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white transition-colors"
+                      title="Clear Chat & Context"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <button
+                      onClick={onClose}
+                      className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -733,13 +757,12 @@ ${FC_API_DOC}
                       )}
                       {/* Spoken text (only when AI uses speak tool) */}
                       {msg.text && (
-                        <div className={`rounded-xl px-3 py-2 text-[12px] ${
-                          msg.isError 
-                            ? 'bg-red-500/10 border border-red-500/20 text-red-400 font-mono' 
+                        <div className={`rounded-xl px-3 py-2 text-[12px] ${msg.isError
+                            ? 'bg-red-500/10 border border-red-500/20 text-red-400 font-mono'
                             : 'bg-white/5 border border-white/10 text-gray-300'
-                        }`}>
-                          {msg.isError && retryCountdown > 0 && msg.text.includes('Retrying enabled in') 
-                            ? `⚠ Quota exceeded. Retrying enabled in ${retryCountdown}s...` 
+                          }`}>
+                          {msg.isError && retryCountdown > 0 && msg.text.includes('Retrying enabled in')
+                            ? `⚠ Quota exceeded. Retrying enabled in ${retryCountdown}s...`
                             : msg.text}
                         </div>
                       )}
