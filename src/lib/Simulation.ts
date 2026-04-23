@@ -926,8 +926,7 @@ export class Simulation {
       const substeps = isNaN(desiredSubsteps) ? 1 : Math.max(1, Math.min(this.maxSubsteps, desiredSubsteps));
       const stepDt = safeDt / substeps;
 
-      const vehicleIsAnchored = this.vehicle && (this.vehicle as any).parentBodyId;
-      const useWasm = this.wasmPhysics.active && !vehicleIsAnchored;
+      const useWasm = this.wasmPhysics.active;
 
       if (useWasm) this.wasmPhysics.upload(this.bodies as any[]);
 
@@ -962,11 +961,13 @@ export class Simulation {
   stepPhysics(stepDt: number, wasmActive: boolean = false) {
 
     // Autopilot Execution & Vehicle Controls
-    for (const b of this.bodies) {
-      const v = b as any;
-      if (v.type !== 'rocket' && v.type !== 'heatProtectedRocket') continue;
+    for (const v of this.bodies) {
+      if ((v as any).type !== 'rocket' && (v as any).type !== 'heatProtectedRocket') continue;
+      
+      const vIdx = this.bodies.indexOf(v);
+      const isAnchored = (v as any).parentBodyId;
 
-      if (v.isAutopilotActive && v.sandbox) {
+      if ((v as any).isAutopilotActive && (v as any).sandbox) {
         const METER_PER_UNIT = 6371000;
         const KG_PER_UNIT_MASS = 5.972e24;
 
@@ -1122,28 +1123,32 @@ export class Simulation {
     //    Prefer WASM core; fall back to JS if not active or vehicle is anchored.
     let wasmUsed = false;
     if (wasmActive) {
-      // Find vehicle index for targeted sync
-      const vIdx = this.vehicle ? this.bodies.indexOf(this.vehicle) : -1;
-      
-      // OPTIMIZATION: If vehicle is thrusting, we MUST update its velocity in WASM memory 
-      // before the next step, because the thrust was calculated in JS above.
-      if (vIdx !== -1 && this.vehicle) {
-        // We reuse the WASM buffer pointer and stride
-        const ptr = this.wasmPhysics.getBufferPtr();
-        const mem = (this.wasmPhysics as any).wasmMemory.buffer;
-        const view = new Float64Array(mem, ptr + (vIdx * 7 * 8), 4);
-        view[0] = this.vehicle.position.x;
-        view[1] = this.vehicle.position.y;
-        view[2] = this.vehicle.velocity.x;
-        view[3] = this.vehicle.velocity.y;
+      // Find indices of thrusting vehicles for targeted sync
+      for (const b of this.bodies) {
+        if (((b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket') && (b as any).thrusting && !(b as any).parentBodyId) {
+          const vIdx = this.bodies.indexOf(b);
+          if (vIdx !== -1) {
+            const ptr = this.wasmPhysics.getBufferPtr();
+            const mem = (this.wasmPhysics as any).wasmMemory.buffer;
+            const view = new Float64Array(mem, ptr + (vIdx * 7 * 8), 4);
+            view[0] = b.position.x;
+            view[1] = b.position.y;
+            view[2] = b.velocity.x;
+            view[3] = b.velocity.y;
+          }
+        }
       }
 
       this.wasmPhysics.execute(stepDt, this.G, this.C);
 
-      // CRITICAL: Sync only the vehicle back to JS so the autopilot in the NEXT substep 
-      // knows where we actually are.
-      if (vIdx !== -1 && this.vehicle) {
-        this.wasmPhysics.downloadSingleBody(vIdx, this.vehicle as any);
+      // Sync thrusting vehicles back to JS immediately
+      for (const b of this.bodies) {
+        if (((b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket') && (b as any).thrusting) {
+          const vIdx = this.bodies.indexOf(b);
+          if (vIdx !== -1) {
+            this.wasmPhysics.downloadSingleBody(vIdx, b as any);
+          }
+        }
       }
       
       wasmUsed = true;
@@ -1153,7 +1158,7 @@ export class Simulation {
       // --- JS fallback: gravity ---
       for (let i = 0; i < this.bodies.length; i++) {
         const b1 = this.bodies[i];
-        if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) continue;
+        if ((b1 as any).parentBodyId) continue;
 
         let ax = 0, ay = 0;
         for (let j = 0; j < this.bodies.length; j++) {
@@ -1186,16 +1191,16 @@ export class Simulation {
       const b1 = this.bodies[i];
 
       // Position Update
-      if (this.vehicle && b1.id === this.vehicle.id && (this.vehicle as any).parentBodyId) {
-        // Anchored vehicle: always track parent position in JS
-        const parent = this.bodies.find(b => b.id === (this.vehicle as any).parentBodyId);
+      if ((b1 as any).parentBodyId) {
+        // Anchored body: always track parent position
+        const parent = this.bodies.find(b => b.id === (b1 as any).parentBodyId);
         if (parent) {
-          b1.position.x = parent.position.x + (this.vehicle as any).relativeOffset.x;
-          b1.position.y = parent.position.y + (this.vehicle as any).relativeOffset.y;
+          b1.position.x = parent.position.x + (b1 as any).relativeOffset.x;
+          b1.position.y = parent.position.y + (b1 as any).relativeOffset.y;
           b1.velocity.x = parent.velocity.x;
           b1.velocity.y = parent.velocity.y;
         } else {
-          (this.vehicle as any).parentBodyId = null;
+          (b1 as any).parentBodyId = null;
           if (!wasmUsed) {
             b1.position.x += b1.velocity.x * stepDt;
             b1.position.y += b1.velocity.y * stepDt;
@@ -1230,62 +1235,91 @@ export class Simulation {
         if (isB2BH) captureRadius = isB1BH ? Math.min(captureRadius, b2.radius * 0.99) : b2.radius * 0.99;
         if (distSq < captureRadius * captureRadius) {
           const bigger = b1.mass >= b2.mass ? b1 : b2;
-          const smaller = b1.mass >= b2.mass ? b2 : b1;
+          const smaller = b1.mass >= b2.mass ? b2 : b1;          // Check if a rocket is involved in collision
+          const isB1Rocket = (b1 as any).type === 'rocket' || (b1 as any).type === 'heatProtectedRocket';
+          const isB2Rocket = (b2 as any).type === 'rocket' || (b2 as any).type === 'heatProtectedRocket';
 
-          // Check if vehicle is involved in collision
-          if (this.vehicle && (b1.id === this.vehicle.id || b2.id === this.vehicle.id)) {
-            const vehicleBody = b1.id === this.vehicle.id ? b1 : b2;
-            const other = b1.id === this.vehicle.id ? b2 : b1;
+          if (isB1Rocket && isB2Rocket) {
+            // ROCKET vs ROCKET: Physical bounce or explosion only
+            const relVx = b1.velocity.x - b2.velocity.x;
+            const relVy = b1.velocity.y - b2.velocity.y;
+            const relSpeedSq = relVx * relVx + relVy * relVy;
+            const impactEnergy = 0.5 * Math.min(b1.mass, b2.mass) * relSpeedSq;
+
+            if (impactEnergy > 50) { // Explode if impact is significant
+              b1.mass = 0;
+              b2.mass = 0;
+              if (this.vehicle?.id === b1.id || this.vehicle?.id === b2.id) this.vehicle = null;
+              break;
+            } else {
+              // Elastic bounce
+              const angle = Math.atan2(b1.position.y - b2.position.y, b1.position.x - b2.position.x);
+              const nx = Math.cos(angle), ny = Math.sin(angle);
+              const overlap = (b1.radius + b2.radius) - Math.sqrt(distSq);
+              
+              b1.position.x += nx * (overlap * 0.51);
+              b1.position.y += ny * (overlap * 0.51);
+              b2.position.x -= nx * (overlap * 0.51);
+              b2.position.y -= ny * (overlap * 0.51);
+
+              const v1n = b1.velocity.x * nx + b1.velocity.y * ny;
+              const v2n = b2.velocity.x * nx + b2.velocity.y * ny;
+              b1.velocity.x += (v2n - v1n) * nx;
+              b1.velocity.y += (v2n - v1n) * ny;
+              b2.velocity.x += (v1n - v2n) * nx;
+              b2.velocity.y += (v1n - v2n) * ny;
+              continue;
+            }
+          } else if (isB1Rocket || isB2Rocket) {
+            // ROCKET vs CELESTIAL BODY: Landing or Crash
+            const vehicleBody = isB1Rocket ? b1 : b2;
+            const other = isB1Rocket ? b2 : b1;
 
             if ((vehicleBody as any).parentBodyId === other.id) continue;
 
-            // If it's a black hole or extreme star, destroy rocket
+            // Only allow landing on massive non-rocket bodies
+            const isOtherCelestial = !((other as any).type === 'rocket' || (other as any).type === 'heatProtectedRocket');
+
             if (this.isBodyBlackHole(other) || other.mass > 1000000) {
               vehicleBody.mass = 0;
-              this.vehicle = null;
+              if (this.vehicle?.id === vehicleBody.id) this.vehicle = null;
               break;
             } else {
-              // Calculate relative speed for impact damage
               const relVx = vehicleBody.velocity.x - other.velocity.x;
               const relVy = vehicleBody.velocity.y - other.velocity.y;
               const relSpeedSq = relVx * relVx + relVy * relVy;
 
-              if ((vehicleBody as any).isLaunchingOrThrusting) {
-                // Launching: only depenetrate if sinking in, otherwise fly free
-                const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
-                const nx = Math.cos(angle), ny = Math.sin(angle);
-                const relVx = vehicleBody.velocity.x - other.velocity.x;
-                const relVy = vehicleBody.velocity.y - other.velocity.y;
-                const inward = relVx * nx + relVy * ny;
-                if (inward < 0) {
-                  // Still sinking: push out and cancel inward velocity
-                  const surfaceDist = other.radius + vehicleBody.radius;
-                  vehicleBody.position.x = other.position.x + nx * surfaceDist;
-                  vehicleBody.position.y = other.position.y + ny * surfaceDist;
-                  vehicleBody.velocity.x -= inward * nx;
-                  vehicleBody.velocity.y -= inward * ny;
-                }
-                continue; // Never merge/crash while thrusting
-              } else if (relSpeedSq < 1e-6 && !(vehicleBody as any).isLaunchingOrThrusting) {
-                // Gentle landing: bind to surface
+              if (isOtherCelestial && relSpeedSq < 0.05 && !(vehicleBody as any).isLaunchingOrThrusting) {
+                // Gentle landing
                 const v = vehicleBody as any;
                 v.parentBodyId = other.id;
                 v.velocity.x = other.velocity.x;
                 v.velocity.y = other.velocity.y;
                 const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
-                v.rotation = angle; // Align to surface
+                v.rotation = angle;
                 v.position.x = other.position.x + Math.cos(angle) * (other.radius + vehicleBody.radius);
                 v.position.y = other.position.y + Math.sin(angle) * (other.radius + vehicleBody.radius);
                 v.relativeOffset = {
                   x: v.position.x - other.position.x,
                   y: v.position.y - other.position.y
                 };
-                continue; // Don't merge
+                continue;
               } else {
-                // High impact crash
-                vehicleBody.mass = 0;
-                this.vehicle = null;
-                break;
+                if (relSpeedSq > 0.5) {
+                   vehicleBody.mass = 0;
+                   if (this.vehicle?.id === vehicleBody.id) this.vehicle = null;
+                   break;
+                } else {
+                   // Bounce off planet
+                   const angle = Math.atan2(vehicleBody.position.y - other.position.y, vehicleBody.position.x - other.position.x);
+                   const nx = Math.cos(angle), ny = Math.sin(angle);
+                   const surfaceDist = other.radius + vehicleBody.radius;
+                   vehicleBody.position.x = other.position.x + nx * surfaceDist;
+                   vehicleBody.position.y = other.position.y + ny * surfaceDist;
+                   vehicleBody.velocity.x = (vehicleBody.velocity.x + other.velocity.x) * 0.5;
+                   vehicleBody.velocity.y = (vehicleBody.velocity.y + other.velocity.y) * 0.5;
+                   continue;
+                }
               }
             }
           }

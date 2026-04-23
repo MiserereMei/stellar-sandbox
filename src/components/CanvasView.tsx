@@ -372,10 +372,6 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           };
 
           if (isVehicle) {
-            // Remove old vehicle if exists
-            if (sim.vehicle) {
-              sim.bodies = sim.bodies.filter((b) => b.id !== sim.vehicle?.id);
-            }
 
             const v: any = {
               ...newBody,
@@ -458,12 +454,6 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 };
 
                 if (isVehicle) {
-                  // Remove old vehicle if exists
-                  if (sim.vehicle) {
-                    sim.bodies = sim.bodies.filter(
-                      (b) => b.id !== sim.vehicle?.id,
-                    );
-                  }
 
                   const v: any = {
                     ...newBody,
@@ -792,14 +782,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       }
       
       if (clickedBody) {
-        if (sim.camera.followingId !== clickedBody.id) {
-          sim.camera.followingId = clickedBody.id;
-        } else {
-          const type = (clickedBody as any).type;
-          if (type === 'rocket' || type === 'heatProtectedRocket') {
-            window.open(`/?editor=${clickedBody.id}`, `Editor_${clickedBody.id}`, 'width=800,height=600,left=200,top=100');
-          }
-        }
+        sim.camera.followingId = clickedBody.id;
       }
     };
 
@@ -808,8 +791,18 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       // Ignore if typing in a text field
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
-      if (!sim.vehicle) return;
-      const v: any = sim.vehicle;
+      const getTargetVehicle = (): any => {
+        if (sim.camera.followingId) {
+          const followed = sim.bodies.find(b => b.id === sim.camera.followingId);
+          if (followed && ((followed as any).type === 'rocket' || (followed as any).type === 'heatProtectedRocket')) {
+            return followed;
+          }
+        }
+        return sim.vehicle;
+      };
+
+      const v = getTargetVehicle();
+      if (!v) return;
       if (e.key.toLowerCase() === "w") {
         v.thrusting = true;
         v.parentBodyId = null; // Break binding on launch
@@ -823,8 +816,18 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
       // Ignore if typing in a text field
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
-      if (!sim.vehicle) return;
-      const v: any = sim.vehicle;
+      const getTargetVehicle = (): any => {
+        if (sim.camera.followingId) {
+          const followed = sim.bodies.find(b => b.id === sim.camera.followingId);
+          if (followed && ((followed as any).type === 'rocket' || (followed as any).type === 'heatProtectedRocket')) {
+            return followed;
+          }
+        }
+        return sim.vehicle;
+      };
+
+      const v = getTargetVehicle();
+      if (!v) return;
       if (e.key.toLowerCase() === "w") v.thrusting = false;
       if (e.key.toLowerCase() === "a") v.rotatingLeft = false;
       if (e.key.toLowerCase() === "d") v.rotatingRight = false;
@@ -1268,8 +1271,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             }
           } else {
             // Rocket rendering
-            if (sim.vehicle && b.id === sim.vehicle.id) {
-              const v = sim.vehicle;
+            const isRocketType = (b as any).type === 'rocket' || (b as any).type === 'heatProtectedRocket';
+            if (isRocketType) {
+              const v = b as any;
               const l_px = Math.max((v as any).length || b.radius * 2, 6 / zoom) * zoom;
               const r_px = l_px / 2; 
 
