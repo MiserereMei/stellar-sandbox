@@ -893,7 +893,11 @@ function autopilotStep(t, fc) {
   stepPhysics(stepDt: number) {
 
         // Autopilot Execution
-        if (this.isAutopilotActive && this.vehicle) {
+        if (this.isAutopilotActive) {
+          if (!this.vehicle) {
+            this.autopilotLog("Cannot communicate with ship.");
+            this.stopAutopilot();
+          } else {
           const METER_PER_UNIT = 6371000;
           const KG_PER_UNIT_MASS = 5.972e24;
 
@@ -958,6 +962,7 @@ function autopilotStep(t, fc) {
           }
           
           this.sandbox.step(this.missionTime, fcState);
+          }
         }
 
         // Vehicle controls

@@ -45,6 +45,10 @@ export const AutopilotConsole: React.FC<AutopilotConsoleProps> = ({ sim, logs, o
       sim.stopAutopilot();
       onAddLog?.("Autopilot stopped.");
     } else {
+      if (!sim.vehicle) {
+        onAddLog?.("Cannot communicate with ship.");
+        return;
+      }
       try {
         sim.startAutopilot(script, (msg) => onAddLog?.(msg));
         setError(null);

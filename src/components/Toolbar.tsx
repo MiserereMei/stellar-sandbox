@@ -5,7 +5,7 @@ import { ToolMode, AddMode, BodyPreset, VisualSettings, ActivePopUp } from '../A
 import { AIChat } from './AIChat';
 import { catalogue, PlanetarySystem } from '../lib/CatalogueService';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Globe, Sun, Layers } from 'lucide-react';
+import { Search, Globe, Sun, Layers, X } from 'lucide-react';
 
 interface ToolbarProps {
   sim: Simulation;
@@ -38,6 +38,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [timeUnit, setTimeUnit] = useState<number>(1);
   const [inputValue, setInputValue] = useState<string>("1");
   const [addMenuTab, setAddMenuTab] = useState<'body' | 'vehicle' | 'system' | 'simulation' | 'exoplanets'>('body');
+  const [settingsTab, setSettingsTab] = useState<'visual' | 'streaming' | 'ai' | 'engine'>('visual');
   const [anchors, setAnchors] = useState<Record<string, { left: number, top: number }>>({});
   const [displayZoom, setDisplayZoom] = useState(sim.camera.zoom);
   const dateRef = React.useRef<HTMLSpanElement>(null);
@@ -92,7 +93,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       if (id === 'add') setToolMode('add');
       if (id === 'add' && addMenuTab === 'exoplanets' && oecSystems.length === 0) {
-          fetchOEC();
+        fetchOEC();
       }
       setActivePopUp(id);
     }
@@ -276,9 +277,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <Plus size={20} />
             </DockButton>
 
-            <DockButton 
-              color="red" 
-              onClick={() => { sim.clear(); sim.camera.followingId = null; setLastAction(null); }} 
+            <DockButton
+              color="red"
+              onClick={() => { sim.clear(); sim.camera.followingId = null; setLastAction(null); }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 if (lastAction) {
@@ -332,7 +333,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               </button>
             </div>
 
-            <div 
+            <div
               onClick={handleDateClick}
               className={`flex flex-col justify-center px-3 h-11 bg-white/5 rounded-xl border border-white/5 shadow-inner select-none cursor-pointer hover:bg-white/10 transition-all relative overflow-hidden group ${isJumping ? 'pointer-events-none' : ''} ${activePopUp === 'jump' ? 'border-blue-500/50 bg-blue-500/10' : ''}`}
             >
@@ -366,8 +367,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <button
                 onClick={() => { setToolMode('ruler'); setActivePopUp(null); }}
                 className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all group ${toolMode === 'ruler'
-                    ? 'bg-blue-600 text-white'
-                    : 'hover:bg-white/10 text-gray-400 hover:text-white'
+                  ? 'bg-blue-600 text-white'
+                  : 'hover:bg-white/10 text-gray-400 hover:text-white'
                   }`}
                 title="Distance Ruler"
               >
@@ -392,7 +393,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
           {/* SYSTEM ACTIONS */}
           <div className="flex items-center gap-1.5">
-            <DockButton color="purple" active={activePopUp === 'ai'} onClick={(e) => togglePopUp('ai', e)} title="AstroForge AI">
+            <DockButton color="purple" active={activePopUp === 'ai'} onClick={(e) => togglePopUp('ai', e)} title="Astro Copilot">
               <Sparkles size={18} fill={activePopUp === 'ai' ? "currentColor" : "none"} />
             </DockButton>
 
@@ -430,8 +431,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     }
                   }}
                   className={`flex-1 text-[9px] font-bold uppercase tracking-widest py-1.5 rounded-md transition-all ${addMenuTab === tab
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
                 >
                   {tab}
@@ -449,8 +450,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       setToolMode('add');
                     }}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${sim.creationTemplate.presetType === 'rocket'
-                        ? 'border-blue-500 bg-blue-500/10 text-white'
-                        : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
+                      ? 'border-blue-500 bg-blue-500/10 text-white'
+                      : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
                       }`}
                   >
                     <div className="w-4 h-4 bg-white rounded-full" />
@@ -463,8 +464,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       setToolMode('add');
                     }}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${sim.creationTemplate.presetType === 'heatProtectedRocket'
-                        ? 'border-blue-500 bg-blue-500/10 text-white'
-                        : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
+                      ? 'border-blue-500 bg-blue-500/10 text-white'
+                      : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
                       }`}
                   >
                     <div className="w-4 h-4 bg-orange-500 rounded-full" />
@@ -508,8 +509,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                           else setAddMode('orbit');
                         }}
                         className={`flex flex-col items-center gap-2 p-2 rounded-lg border transition-all ${sim.creationTemplate.presetType === p
-                            ? 'border-blue-500 bg-blue-500/10 text-white'
-                            : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
+                          ? 'border-blue-500 bg-blue-500/10 text-white'
+                          : 'border-white/5 bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
                           }`}
                       >
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p === 'blackhole' ? 'black' : meta.color, border: '1px solid white' }} />
@@ -549,10 +550,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 ].map(sys => (
                   <button
                     key={sys.label}
-                    onClick={() => { 
-                      sys.action(); 
-                      setToolMode('select'); 
-                      setActivePopUp(null); 
+                    onClick={() => {
+                      sys.action();
+                      setToolMode('select');
+                      setActivePopUp(null);
                       setLastAction(() => sys.action);
                     }}
                     className="w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
@@ -574,10 +575,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 ].map(scenario => (
                   <button
                     key={scenario.label}
-                    onClick={() => { 
-                      scenario.action(); 
-                      setToolMode('select'); 
-                      setActivePopUp(null); 
+                    onClick={() => {
+                      scenario.action();
+                      setToolMode('select');
+                      setActivePopUp(null);
                       setLastAction(() => scenario.action);
                       if (sim.currentScript) setShowAutopilot(true);
                     }}
@@ -592,83 +593,83 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             {addMenuTab === 'exoplanets' && (
               <div className="space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input 
-                        type="text" 
-                        placeholder="Search OEC (e.g. TRAPPIST, Kepler)..." 
-                        value={oecSearch}
-                        onChange={(e) => setOecSearch(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50"
-                    />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search OEC (e.g. TRAPPIST, Kepler)..."
+                    value={oecSearch}
+                    onChange={(e) => setOecSearch(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50"
+                  />
                 </div>
 
                 <div className="flex gap-1">
-                    {(['all', 'multi', 'nearby'] as const).map(f => (
-                        <button 
-                            key={f}
-                            onClick={() => setOecFilter(f)}
-                            className={`flex-1 py-1 rounded text-[8px] font-bold uppercase tracking-widest transition-all ${oecFilter === f ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-500'}`}
-                        >
-                            {f}
-                        </button>
-                    ))}
+                  {(['all', 'multi', 'nearby'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setOecFilter(f)}
+                      className={`flex-1 py-1 rounded text-[8px] font-bold uppercase tracking-widest transition-all ${oecFilter === f ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-500'}`}
+                    >
+                      {f}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-1" style={{ maxHeight: '400px' }}>
-                    {loadingOEC ? (
-                        <div className="py-20 flex flex-col items-center justify-center gap-3 opacity-50">
-                            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                            <div className="text-[9px] font-bold tracking-[2px] uppercase">Retrieving Catalogue...</div>
-                        </div>
-                    ) : (
-                        oecSystems
-                          .filter(s => {
-                            if (oecSearch) return s.name.toLowerCase().includes(oecSearch.toLowerCase());
-                            if (oecFilter === 'multi') return s.planets.length > 3;
-                            if (oecFilter === 'nearby') return s.planets[0].distance < 20 && s.planets[0].distance > 0;
-                            return true;
-                          })
-                          .slice(0, 100)
-                          .map(sys => (
-                            <button 
-                                key={sys.name}
-                                onClick={() => { 
-                                  sim.loadOECSystem(sys); 
-                                  setActivePopUp(null); 
-                                  setLastAction(() => () => sim.loadOECSystem(sys));
-                                }}
-                                className="w-full flex items-center justify-between bg-black/40 hover:bg-blue-900/10 border border-white/5 hover:border-blue-500/30 p-3 rounded-xl transition-all group"
-                            >
-                                <div className="text-left flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-all">
-                                        {sys.planets.length > 1 ? <Layers size={14} /> : <Globe size={14} />}
-                                    </div>
-                                    <div>
-                                        <div className="text-[11px] font-bold text-white group-hover:text-blue-400">{sys.name}</div>
-                                        <div className="text-[9px] text-gray-500 mt-0.5">
-                                            {sys.planets.length} Planets • {sys.star.mass.toFixed(2)} M☉ • {sys.planets[0].radius > 0 ? (sys.planets[0].radius * 11.2).toFixed(1) : '?'} R⊕ • {sys.planets[0].mass > 0 ? (sys.planets[0].mass * 317.8).toFixed(1) : '?'} M⊕
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-[8px] text-blue-500 font-bold tracking-widest group-hover:translate-x-1 transition-transform">DEPLOY →</div>
-                                    {sys.planets[0].distance > 0 && (
-                                        <div className="text-[7px] text-gray-600 mt-1">{sys.planets[0].distance.toFixed(1)} pc</div>
-                                    )}
-                                </div>
-                            </button>
-                        ))
-                    )}
+                  {loadingOEC ? (
+                    <div className="py-20 flex flex-col items-center justify-center gap-3 opacity-50">
+                      <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="text-[9px] font-bold tracking-[2px] uppercase">Retrieving Catalogue...</div>
+                    </div>
+                  ) : (
+                    oecSystems
+                      .filter(s => {
+                        if (oecSearch) return s.name.toLowerCase().includes(oecSearch.toLowerCase());
+                        if (oecFilter === 'multi') return s.planets.length > 3;
+                        if (oecFilter === 'nearby') return s.planets[0].distance < 20 && s.planets[0].distance > 0;
+                        return true;
+                      })
+                      .slice(0, 100)
+                      .map(sys => (
+                        <button
+                          key={sys.name}
+                          onClick={() => {
+                            sim.loadOECSystem(sys);
+                            setActivePopUp(null);
+                            setLastAction(() => () => sim.loadOECSystem(sys));
+                          }}
+                          className="w-full flex items-center justify-between bg-black/40 hover:bg-blue-900/10 border border-white/5 hover:border-blue-500/30 p-3 rounded-xl transition-all group"
+                        >
+                          <div className="text-left flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                              {sys.planets.length > 1 ? <Layers size={14} /> : <Globe size={14} />}
+                            </div>
+                            <div>
+                              <div className="text-[11px] font-bold text-white group-hover:text-blue-400">{sys.name}</div>
+                              <div className="text-[9px] text-gray-500 mt-0.5">
+                                {sys.planets.length} Planets • {sys.star.mass.toFixed(2)} M☉ • {sys.planets[0].radius > 0 ? (sys.planets[0].radius * 11.2).toFixed(1) : '?'} R⊕ • {sys.planets[0].mass > 0 ? (sys.planets[0].mass * 317.8).toFixed(1) : '?'} M⊕
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[8px] text-blue-500 font-bold tracking-widest group-hover:translate-x-1 transition-transform">DEPLOY →</div>
+                            {sys.planets[0].distance > 0 && (
+                              <div className="text-[7px] text-gray-600 mt-1">{sys.planets[0].distance.toFixed(1)} pc</div>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                  )}
                 </div>
 
                 <div className="p-2 bg-blue-500/5 rounded-xl border border-blue-500/10">
-                    <div className="text-[8px] text-blue-400/80 uppercase font-bold tracking-[2px] flex items-center gap-2">
-                        <Sun size={10} />
-                        Scientific Metadata
-                    </div>
-                    <div className="text-[8px] text-gray-500 mt-1 leading-relaxed">
-                        Showing {oecSystems.length} systems from OEC. Parameters are derived from RV/Transit data.
-                    </div>
+                  <div className="text-[8px] text-blue-400/80 uppercase font-bold tracking-[2px] flex items-center gap-2">
+                    <Sun size={10} />
+                    Scientific Metadata
+                  </div>
+                  <div className="text-[8px] text-gray-500 mt-1 leading-relaxed">
+                    Showing {oecSystems.length} systems from OEC. Parameters are derived from RV/Transit data.
+                  </div>
                 </div>
               </div>
             )}
@@ -697,7 +698,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-1">Target Date</label>
-                <input 
+                <input
                   type="date"
                   value={jumpTargetDate}
                   onChange={(e) => setJumpTargetDate(e.target.value)}
@@ -749,159 +750,224 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       <AnimatePresence>
         {activePopUp === 'settings' && (
-          <motion.div
-            style={anchors.settings ? {
-              left: anchors.settings.side === 'right' ? undefined : anchors.settings.left,
-              right: anchors.settings.side === 'right' ? (window.innerWidth - anchors.settings.left) : undefined,
-              bottom: window.innerHeight - (anchors.settings.top ?? 0) + 16
-            } : undefined}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="fixed bg-[#0c1016]/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-4 w-56 flex flex-col gap-2 z-[100] will-change-transform"
-          >
-            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Visual Config</div>
-            {[
-              { id: 'warpEnabled', label: 'Space Warp' },
-              { id: 'gridEnabled', label: 'Space Grid' },
-              { id: 'starsEnabled', label: 'Reference Stars' },
-              { id: 'trailsEnabled', label: 'Orbit History' }
-            ].map((opt) => (
-              <label key={opt.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group">
-                <span className="text-[10px] uppercase tracking-wide text-gray-400 group-hover:text-white font-medium">{opt.label}</span>
-                <input
-                  type="checkbox"
-                  checked={(visualSettings as any)[opt.id]}
-                  onChange={() => setVisualSettings({ ...visualSettings, [opt.id]: !(visualSettings as any)[opt.id] })}
-                  className="w-3 h-3 rounded border-white/10 bg-transparent text-blue-500 focus:ring-0"
-                />
-              </label>
-            ))}
+          <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
+            {/* Dark overlay backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActivePopUp(null)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto"
+            />
 
-            {/* Streaming Mode Toggle */}
-            <div className="pt-2 mt-1 border-t border-white/10">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Streaming Mode</div>
-              <button
-                onClick={() => setStreamingMode(!streamingMode)}
-                className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                  streamingMode
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                    : 'border-white/10 bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                <span className="text-[10px] uppercase tracking-wide font-medium">
-                  {streamingMode ? '● LIVE' : 'Enable'}
-                </span>
-                <span className="text-[8px] text-white/20 font-mono">Ctrl+Shift+S</span>
-              </button>
-            </div>
-
-            <div className="pt-2 mt-1 border-t border-white/10 flex flex-col gap-2">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">AstroForge AI Config</div>
-              <label className="flex flex-col gap-1">
-                <span className="text-[9px] text-gray-400 uppercase tracking-widest">Gemini API Key</span>
-                <input type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Paste Gemini key here..."
-                  className="bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-purple-400 outline-none focus:border-purple-500 font-mono"
-                />
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[8px] text-purple-500/70 hover:text-purple-400 underline transition-colors">Get a free key at AI Studio</a>
-              </label>
-            </div>
-
-            <div className="pt-2 mt-1 border-t border-white/10 flex flex-col gap-2">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Physics Engine</div>
-              <label className="flex flex-col gap-1">
-                <span className="text-[9px] text-gray-400 uppercase tracking-widest">Gravitational Constant (G)</span>
-                <input type="number"
-                  defaultValue={sim.G}
-                  step="any"
-                  onBlur={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (!isNaN(val)) sim.G = val;
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const val = parseFloat(e.currentTarget.value);
-                      if (!isNaN(val)) sim.G = val;
-                    }
-                  }}
-                  className="bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-blue-500 font-mono"
-                />
-              </label>
-            </div>
-
-            <div className="pt-2 mt-1 border-t border-white/10 flex flex-col gap-2">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">State</div>
-              <div className="flex gap-2">
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative bg-[#0c1016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl w-[800px] min-h-[600px] flex flex-col pointer-events-auto overflow-hidden will-change-transform"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
+                <div className="text-[14px] text-white font-bold tracking-widest flex items-center gap-2">
+                  <Settings size={16} className="text-blue-400" />
+                  SYSTEM SETTINGS
+                </div>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(sim.bodies.map(b => ({ ...b, trail: [] }))));
-                    alert('Scenario JSON exported to clipboard!');
-                  }}
-                  className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-1.5 rounded transition-colors"
-                >Export JSON</button>
-                <button
-                  onClick={() => {
-                    const exportData = {
-                      bodies: sim.bodies.map(b => ({ ...b, trail: [] })),
-                      script: sim.currentScript,
-                      camera: {
-                        x: sim.camera.x,
-                        y: sim.camera.y,
-                        zoom: sim.camera.zoom,
-                        followingId: sim.camera.followingId
-                      }
-                    };
-                    const json = JSON.stringify(exportData);
-                    const base64 = btoa(unescape(encodeURIComponent(json)));
-                    window.history.replaceState(null, '', '#' + base64);
-                    navigator.clipboard.writeText(window.location.href);
-                    alert('Shareable URL generated and copied to clipboard!');
-                  }}
-                  className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-1.5 rounded transition-colors"
-                >Export URL</button>
-                <button
-                  onClick={() => {
-                    const data = prompt('Paste scenario data or URL:');
-                    if (data) {
-                      const loadData = (raw: string) => {
-                        try {
-                          let jsonStr = raw;
-                          if (raw.includes('#')) {
-                            const base64 = raw.split('#')[1];
-                            jsonStr = decodeURIComponent(escape(atob(base64)));
-                          }
-                          const parsed = JSON.parse(jsonStr);
-                          sim.clear();
-                          if (Array.isArray(parsed)) {
-                            sim.bodies = parsed;
-                          } else if (parsed.bodies) {
-                            sim.bodies = parsed.bodies;
-                            if (parsed.script) sim.currentScript = parsed.script;
-                            if (parsed.camera) {
-                              sim.camera.x = parsed.camera.x || 0;
-                              sim.camera.y = parsed.camera.y || 0;
-                              sim.camera.zoom = parsed.camera.zoom || 1;
-                              sim.camera.followingId = parsed.camera.followingId || null;
-                            }
-                          }
-                          const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
-                          if (v) sim.vehicle = v as any;
-                        } catch (e) {
-                          alert('Invalid scenario data');
-                        }
-                      };
-                      loadData(data);
-                      setLastAction(() => () => loadData(data));
-                    }
-                  }}
-                  className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-1.5 rounded transition-colors"
-                >Import</button>
+                  onClick={() => setActivePopUp(null)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
               </div>
-            </div>
-          </motion.div>
+
+              {/* Body */}
+              <div className="flex flex-1 min-h-0">
+                {/* Left Sidebar Tabs */}
+                <div className="w-[200px] border-r border-white/10 bg-black/20 p-2 flex flex-col gap-1">
+                  {[
+                    { id: 'visual', label: 'Visuals', icon: <Layers size={14} /> },
+                    { id: 'streaming', label: 'Streaming', icon: <Globe size={14} /> },
+                    { id: 'ai', label: 'Astro Copilot', icon: <Sparkles size={14} /> },
+                    { id: 'engine', label: 'Engine Core', icon: <Settings size={14} /> }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSettingsTab(tab.id as any)}
+                      className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3 py-3 rounded-lg transition-all text-left ${settingsTab === tab.id
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'
+                        }`}
+                    >
+                      {tab.icon}
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Right Content Area */}
+                <div className="flex-1 p-6 overflow-y-auto">
+                  {settingsTab === 'visual' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Graphics Configuration</div>
+                      {[
+                        { id: 'warpEnabled', label: 'Space Warp Grid' },
+                        { id: 'gridEnabled', label: 'Coordinate Grid' },
+                        { id: 'starsEnabled', label: 'Background Stars' },
+                        { id: 'trailsEnabled', label: 'Orbital History Trails' }
+                      ].map((opt) => (
+                        <label key={opt.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 cursor-pointer transition-colors group">
+                          <span className="text-[11px] uppercase tracking-wide text-gray-300 group-hover:text-white font-medium">{opt.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={(visualSettings as any)[opt.id]}
+                            onChange={() => setVisualSettings({ ...visualSettings, [opt.id]: !(visualSettings as any)[opt.id] })}
+                            className="w-4 h-4 rounded border-white/10 bg-black/50 text-blue-500 focus:ring-0"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {settingsTab === 'streaming' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Cinematic Broadcasting</div>
+                      <p className="text-gray-400 text-xs mb-2 leading-relaxed">
+                        Enable Streaming Mode to activate the cinematic camera, telemetry HUD, and hide editing UI. Useful for recording or live broadcasting.
+                      </p>
+                      <button
+                        onClick={() => setStreamingMode(!streamingMode)}
+                        className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all ${streamingMode
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                          : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                          }`}
+                      >
+                        <span className="text-[11px] uppercase tracking-wide font-bold">
+                          {streamingMode ? '● LIVE BROADCASTING ACTIVE' : 'Enable Streaming Mode'}
+                        </span>
+                        <span className="text-[10px] bg-black/30 px-2 py-1 rounded text-white/50 font-mono font-medium">Ctrl+Shift+S</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {settingsTab === 'ai' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Astro Copilot</div>
+                      <p className="text-gray-400 text-xs mb-3 leading-relaxed">
+                        Configure the Gemini AI connection to enable automated code generation and script analysis for your orbital mechanics.
+                      </p>
+                      <label className="flex flex-col gap-2">
+                        <span className="text-[10px] text-gray-300 uppercase tracking-widest font-semibold">Gemini API Key</span>
+                        <input type="password"
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          placeholder="Paste your Gemini key here..."
+                          className="bg-black/40 border border-white/10 rounded-lg px-3 py-3 text-sm text-purple-400 outline-none focus:border-purple-500 focus:bg-black/60 font-mono transition-colors"
+                        />
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[10px] text-purple-500/70 hover:text-purple-400 underline transition-colors self-start mt-1">Get a free key at Google AI Studio</a>
+                      </label>
+                    </div>
+                  )}
+                  {settingsTab === 'engine' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-2">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Physics Engine</div>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[9px] text-gray-400 uppercase tracking-widest">Gravitational Constant (G)</span>
+                          <input type="number"
+                            defaultValue={sim.G}
+                            step="any"
+                            onBlur={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val)) sim.G = val;
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const val = parseFloat(e.currentTarget.value);
+                                if (!isNaN(val)) sim.G = val;
+                              }
+                            }}
+                            className="bg-black/50 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-blue-500 font-mono transition-colors"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Simulation State</div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(JSON.stringify(sim.bodies.map(b => ({ ...b, trail: [] }))));
+                              alert('Scenario JSON exported to clipboard!');
+                            }}
+                            className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-2 rounded transition-colors"
+                          >Export JSON</button>
+                          <button
+                            onClick={() => {
+                              const exportData = {
+                                bodies: sim.bodies.map(b => ({ ...b, trail: [] })),
+                                script: sim.currentScript,
+                                camera: {
+                                  x: sim.camera.x,
+                                  y: sim.camera.y,
+                                  zoom: sim.camera.zoom,
+                                  followingId: sim.camera.followingId
+                                }
+                              };
+                              const json = JSON.stringify(exportData);
+                              const base64 = btoa(unescape(encodeURIComponent(json)));
+                              window.history.replaceState(null, '', '#' + base64);
+                              navigator.clipboard.writeText(window.location.href);
+                              alert('Shareable URL generated and copied to clipboard!');
+                            }}
+                            className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[10px] uppercase tracking-wider py-2 rounded transition-colors"
+                          >Export URL</button>
+                          <button
+                            onClick={() => {
+                              const data = prompt('Paste scenario data or URL:');
+                              if (data) {
+                                const loadData = (raw: string) => {
+                                  try {
+                                    let jsonStr = raw;
+                                    if (raw.includes('#')) {
+                                      const base64 = raw.split('#')[1];
+                                      jsonStr = decodeURIComponent(escape(atob(base64)));
+                                    }
+                                    const parsed = JSON.parse(jsonStr);
+                                    sim.clear();
+                                    if (Array.isArray(parsed)) {
+                                      sim.bodies = parsed;
+                                    } else if (parsed.bodies) {
+                                      sim.bodies = parsed.bodies;
+                                      if (parsed.script) sim.currentScript = parsed.script;
+                                      if (parsed.camera) {
+                                        sim.camera.x = parsed.camera.x || 0;
+                                        sim.camera.y = parsed.camera.y || 0;
+                                        sim.camera.zoom = parsed.camera.zoom || 1;
+                                        sim.camera.followingId = parsed.camera.followingId || null;
+                                      }
+                                    }
+                                    const v = sim.bodies.find(b => b.type === 'rocket' || b.type === 'heatProtectedRocket');
+                                    if (v) sim.vehicle = v as any;
+                                  } catch (e) {
+                                    alert('Invalid scenario data');
+                                  }
+                                };
+                                loadData(data);
+                                setLastAction(() => () => loadData(data));
+                              }
+                            }}
+                            className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] uppercase tracking-wider py-2 rounded transition-colors"
+                          >Import</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -914,7 +980,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         onSetApiKey={setApiKey}
         onInjectScript={(script) => {
           sim.currentScript = script;
-          sim.startAutopilot(script, () => {});
+          sim.startAutopilot(script, () => { });
           setShowAutopilot(true);
         }}
       />
