@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
-import { Simulation, generateId, Vector2, Body } from "../lib/Simulation";
+import { Simulation, generateId, Vector3, Body } from "../lib/Simulation";
 import {
   ToolMode,
   AddMode,
@@ -243,20 +243,20 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     lastPointerType: string;
     previewRotation: number;
     isPanning: boolean;
-    panStartScreenPos: Vector2 | null;
-    panStartCamera: Vector2 | null;
-    lastPanScreenPos: Vector2 | null;
-    panVelocity: Vector2;
+    panStartScreenPos: Vector3 | null;
+    panStartCamera: Vector3 | null;
+    lastPanScreenPos: Vector3 | null;
+    panVelocity: Vector3;
     hasMomentum: boolean;
-    activePointers: Map<number, Vector2>;
+    activePointers: Map<number, Vector3>;
     lastPinchDist: number | null;
-    lastPinchMidpoint: Vector2 | null;
+    lastPinchMidpoint: Vector3 | null;
     orbitParentId: string | null;
     hoveredBodyId: string | null;
     lastReactHoveredRocketId: string | null;
     longPressTimer: any | null;
     longPressInterval: any | null;
-    pointerDownScreenPos: Vector2 | null;
+    pointerDownScreenPos: Vector3 | null;
   }>({
     isDraggingVector: false,
     dragStartWorldPos: null,
@@ -712,7 +712,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         iState.lastPinchDist === null
       ) {
         iState.isPanning = false; // Disable single-finger panning when starting a pinch
-        const points = Array.from(iState.activePointers.values()) as Vector2[];
+        const points = Array.from(iState.activePointers.values()) as Vector3[];
         const dist = Math.sqrt(
           (points[0].x - points[1].x) ** 2 + (points[0].y - points[1].y) ** 2,
         );
@@ -761,7 +761,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         iState.lastPinchDist !== null &&
         iState.lastPinchMidpoint
       ) {
-        const points = Array.from(iState.activePointers.values()) as Vector2[];
+        const points = Array.from(iState.activePointers.values()) as Vector3[];
         const dist = Math.sqrt(
           (points[0].x - points[1].x) ** 2 + (points[0].y - points[1].y) ** 2,
         );

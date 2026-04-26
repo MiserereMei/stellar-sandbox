@@ -1,4 +1,4 @@
-export type Vector2 = { x: number; y: number };
+export type Vector3 = { x: number; y: number; z: number };
 
 export interface Body {
   id: string;
@@ -6,11 +6,12 @@ export interface Body {
   mass: number;
   radius: number;
   color: string;
-  position: Vector2;
-  velocity: Vector2;
-  trail: Vector2[];
-  projectedTrail?: Vector2[];
+  position: Vector3;
+  velocity: Vector3;
+  trail: Vector3[];
+  projectedTrail?: Vector3[];
   isBlackHole?: boolean;
+  seed?: number;
 }
 
 import { Vehicle } from './Vehicle';
@@ -56,7 +57,7 @@ export class Simulation {
     const earthId = generateId();
     this.bodies.push({
       id: earthId, name: 'Earth', mass: 1.0, radius: 1.0, color: 'hsl(210, 80%, 60%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
 
     const rocketCount = 12;
@@ -79,8 +80,8 @@ export class Simulation {
         radius: meta.radius,
         length: meta.length,
         color: i === 0 ? '#ffffff' : `hsl(${(i * 30) % 360}, 70%, 70%)`,
-        position: { x: nx * surfaceAlt, y: ny * surfaceAlt },
-        velocity: { x: 0, y: 0 },
+        position: { x: nx * surfaceAlt, y: ny * surfaceAlt, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
         trail: [],
         type: 'rocket',
         rotation: angle - Math.PI / 2,
@@ -88,7 +89,7 @@ export class Simulation {
         thrustPower: meta.thrustPower,
         maxKineticEnergy: meta.maxKineticEnergy,
         parentBodyId: earthId,
-        relativeOffset: { x: nx * surfaceAlt, y: ny * surfaceAlt },
+        relativeOffset: { x: nx * surfaceAlt, y: ny * surfaceAlt, z: 0 },
         script: finalScript
       };
 
@@ -117,12 +118,12 @@ export class Simulation {
   trailAccumulator: number = 0;
 
   previewBody: Body | null = null;
-  previewVelocityVector: { start: Vector2, end: Vector2 } | null = null;
-  orbitPreview: { parentId: string, mousePos: Vector2 } | null = null;
-  rulerStartPoint: Vector2 | null = null;
-  rulerEndPoint: Vector2 | null = null;
-  mouseWorldPos: Vector2 = { x: 0, y: 0 };
-  explosions: Array<{ x: number, y: number, radius: number, time: number, maxTime: number, seed: number }> = [];
+  previewVelocityVector: { start: Vector3, end: Vector3 } | null = null;
+  orbitPreview: { parentId: string, mousePos: Vector3 } | null = null;
+  rulerStartPoint: Vector3 | null = null;
+  rulerEndPoint: Vector3 | null = null;
+  mouseWorldPos: Vector3 = { x: 0, y: 0, z: 0 };
+  explosions: Array<{ x: number, y: number, z: number, radius: number, time: number, maxTime: number, seed: number }> = [];
 
   creationTemplate: { presetType: 'star' | 'planet' | 'moon' | 'comet' | 'blackhole' | 'rocket' | 'heatProtectedRocket' } = { presetType: 'planet' };
 
@@ -140,14 +141,15 @@ export class Simulation {
     return starLabels.some(label => body.name.includes(label));
   }
 
-  getDominantBody(position: Vector2): any | null {
+  getDominantBody(position: Vector3): any | null {
     let dominant = null;
     let maxInfluence = -Infinity;
     for (const b of this.bodies) {
       if (b.mass <= 0) continue;
       const dx = b.position.x - position.x;
       const dy = b.position.y - position.y;
-      const distSq = dx * dx + dy * dy + 0.001;
+      const dz = b.position.z - position.z;
+      const distSq = dx * dx + dy * dy + dz * dz + 0.001;
       const influence = b.mass / distSq;
       if (influence > maxInfluence) {
         maxInfluence = influence;
@@ -204,8 +206,8 @@ export class Simulation {
     const body: any = {
       id,
       ...meta,
-      position: { x, y },
-      velocity: { x: vx, y: vy },
+      position: { x, y, z: 0 },
+      velocity: { x: vx, y: vy, z: 0 },
       trail: []
     };
 
@@ -229,7 +231,7 @@ export class Simulation {
     const SUN_M = 333000, SUN_R = 109;
     this.bodies.push({
       id: sunId, name: 'Sun', mass: SUN_M, radius: SUN_R, color: 'hsl(45, 100%, 50%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
 
     const planets = [
@@ -245,7 +247,7 @@ export class Simulation {
       const id = generateId();
       this.bodies.push({
         id, name: p.name, mass: p.mass, radius: p.r, color: p.color,
-        position: { x: p.dist, y: 0 }, velocity: { x: 0, y: v }, trail: []
+        position: { x: p.dist, y: 0, z: 0 }, velocity: { x: 0, y: v, z: 0 }, trail: []
       });
     });
 
@@ -260,7 +262,7 @@ export class Simulation {
     const planetId = generateId();
     const planet: Body = {
       id: planetId, name: 'Earth', mass: 1.0, radius: 1.0, color: 'hsl(210, 80%, 60%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     };
     this.bodies.push(planet);
 
@@ -272,8 +274,8 @@ export class Simulation {
       id: rocketId,
       ...meta,
       trail: [],
-      position: { x: 0, y: -(planet.radius + meta.radius) },
-      velocity: { x: 0, y: 0 },
+      position: { x: 0, y: -(planet.radius + meta.radius), z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
       rotation: -Math.PI / 2,
       type: 'rocket',
       angularVelocity: 0,
@@ -282,7 +284,7 @@ export class Simulation {
       size: meta.radius,
       maxKineticEnergy: meta.maxKineticEnergy,
       parentBodyId: planetId,
-      relativeOffset: { x: 0, y: -(planet.radius + meta.radius) }
+      relativeOffset: { x: 0, y: -(planet.radius + meta.radius), z: 0 }
     };
     this.vehicle = rocket;
     this.bodies.push(rocket);
@@ -304,7 +306,7 @@ export class Simulation {
     const SUN_M = 333000;
     this.bodies.push({
       id: sunId, name: 'Sun', mass: SUN_M, radius: 109.1, color: 'hsl(45, 100%, 50%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
 
     const AU = 23481; // 1 AU = 23,481 Earth Radii (True 1:1 Scale)
@@ -333,8 +335,8 @@ export class Simulation {
 
       this.bodies.push({
         id, name: p.name, mass: p.mass, radius: p.r, color: p.color,
-        position: { x: posX, y: posY },
-        velocity: { x: velX, y: velY },
+        position: { x: posX, y: posY, z: 0 },
+        velocity: { x: velX, y: velY, z: 0 },
         trail: []
       });
 
@@ -343,8 +345,8 @@ export class Simulation {
         const mV = Math.sqrt(this.G * p.mass / mDist);
         this.bodies.push({
           id: generateId(), name: 'Moon', mass: 0.0123, radius: 0.27, color: 'hsl(0, 0%, 80%)',
-          position: { x: posX + mDist, y: posY },
-          velocity: { x: velX, y: velY + mV },
+          position: { x: posX + mDist, y: posY, z: 0 },
+          velocity: { x: velX, y: velY + mV, z: 0 },
           trail: []
         });
       }
@@ -383,8 +385,8 @@ export class Simulation {
       mass: starMass,
       radius: Math.max(5, starRadius), // Minimum visual size
       color: starColor,
-      position: { x: 0, y: 0 },
-      velocity: { x: 0, y: 0 },
+      position: { x: 0, y: 0, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
       trail: []
     });
 
@@ -408,8 +410,8 @@ export class Simulation {
         mass: mass,
         radius: visualRadius,
         color: p.temperature > 300 ? 'hsl(20, 70%, 50%)' : 'hsl(200, 70%, 50%)',
-        position: { x: rp, y: 0 },
-        velocity: { x: 0, y: vp },
+        position: { x: rp, y: 0, z: 0 },
+        velocity: { x: 0, y: vp, z: 0 },
         trail: []
       });
     });
@@ -430,7 +432,7 @@ export class Simulation {
     const SUN_M = 333000;
     this.bodies.push({
       id: sunId, name: 'Sun', mass: SUN_M, radius: 109, color: 'hsl(45, 100%, 50%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
 
     for (let i = 0; i < 200; i++) {
@@ -439,8 +441,8 @@ export class Simulation {
       const v = Math.sqrt(this.G * SUN_M / dist);
       this.bodies.push({
         id: generateId(), name: `Asteroid ${i}`, mass: 1e-6, radius: 0.05, color: 'hsl(0, 0%, 50%)',
-        position: { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist },
-        velocity: { x: -Math.sin(angle) * v, y: Math.cos(angle) * v },
+        position: { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, z: 0 },
+        velocity: { x: -Math.sin(angle) * v, y: Math.cos(angle) * v, z: 0 },
         trail: []
       });
     }
@@ -456,19 +458,19 @@ export class Simulation {
     const s1Id = generateId();
     this.bodies.push({
       id: s1Id, name: 'Alpha', mass: M, radius: 60, color: 'hsl(200, 100%, 60%)',
-      position: { x: 0, y: -dist }, velocity: { x: v, y: 0 }, trail: []
+      position: { x: 0, y: -dist, z: 0 }, velocity: { x: v, y: 0, z: 0 }, trail: []
     });
     this.bodies.push({
       id: generateId(), name: 'Beta', mass: M, radius: 60, color: 'hsl(60, 100%, 50%)',
-      position: { x: dist * 0.866, y: dist * 0.5 }, velocity: { x: -v * 0.5, y: -v * 0.866 }, trail: []
+      position: { x: dist * 0.866, y: dist * 0.5, z: 0 }, velocity: { x: -v * 0.5, y: -v * 0.866, z: 0 }, trail: []
     });
     this.bodies.push({
       id: generateId(), name: 'Proxima', mass: M * 0.8, radius: 50, color: 'hsl(0, 100%, 50%)',
-      position: { x: -dist * 0.866, y: dist * 0.5 }, velocity: { x: -v * 0.5, y: v * 0.866 }, trail: []
+      position: { x: -dist * 0.866, y: dist * 0.5, z: 0 }, velocity: { x: -v * 0.5, y: v * 0.866, z: 0 }, trail: []
     });
     this.bodies.push({
       id: generateId(), name: 'San-Ti', mass: 1.0, radius: 1.0, color: 'hsl(120, 50%, 50%)',
-      position: { x: 0, y: 0 }, velocity: { x: v * 0.5, y: -v * 0.2 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: v * 0.5, y: -v * 0.2, z: 0 }, trail: []
     });
     this.camera.x = 0; this.camera.y = 0; this.camera.zoom = 0.1;
     this.camera.followingId = s1Id;
@@ -479,13 +481,13 @@ export class Simulation {
     const earthId = generateId();
     this.bodies.push({
       id: earthId, name: 'Earth', mass: 1.0, radius: 1.0, color: 'hsl(210, 80%, 60%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
     const mDist = 60; // ~60 Earth radii ≈ real lunar orbit
     const mV = Math.sqrt(this.G * 1.0 / mDist);
     this.bodies.push({
       id: generateId(), name: 'Moon', mass: 0.0123, radius: 0.273, color: 'hsl(0, 0%, 80%)',
-      position: { x: mDist, y: 0 }, velocity: { x: 0, y: mV }, trail: []
+      position: { x: mDist, y: 0, z: 0 }, velocity: { x: 0, y: mV, z: 0 }, trail: []
     });
     for (let i = 0; i < 50; i++) {
       const startX = -2000 - Math.random() * 1000;
@@ -493,7 +495,7 @@ export class Simulation {
       const vMeteor = Math.sqrt(2 * this.G * 1.0 / 1.0) * (1.2 + Math.random() * 0.5); // escape velocity-ish
       this.bodies.push({
         id: generateId(), name: `Meteor ${i}`, mass: 1e-8, radius: 0.005, color: 'hsl(25, 100%, 60%)',
-        position: { x: startX, y: startY }, velocity: { x: vMeteor, y: (Math.random() - 0.5) * vMeteor * 0.3 }, trail: []
+        position: { x: startX, y: startY, z: 0 }, velocity: { x: vMeteor, y: (Math.random() - 0.5) * vMeteor * 0.3, z: 0 }, trail: []
       });
     }
     this.camera.x = 0; this.camera.y = 0; this.camera.zoom = 5;
@@ -508,19 +510,19 @@ export class Simulation {
     const rs = (2 * this.G * M_bh) / (this.C * this.C);
     this.bodies.push({
       id: bhId, name: 'Gargantua', mass: M_bh, radius: rs * 2.6, color: '#000000',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: [], isBlackHole: true
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: [], isBlackHole: true
     });
     const s1Dist = 20000;
     const s1V = Math.sqrt(this.G * M_bh / s1Dist);
     this.bodies.push({
       id: generateId(), name: 'Pantagruel', mass: 333000, radius: 109, color: 'hsl(200, 100%, 60%)',
-      position: { x: s1Dist, y: 0 }, velocity: { x: 0, y: s1V }, trail: []
+      position: { x: s1Dist, y: 0, z: 0 }, velocity: { x: 0, y: s1V, z: 0 }, trail: []
     });
     const cDist = rs * 3;
     const cV = Math.sqrt(this.G * M_bh / cDist) * 1.1;
     this.bodies.push({
       id: generateId(), name: 'TARS-1', mass: 1.0, radius: 1.0, color: '#ffffff',
-      position: { x: cDist, y: 0 }, velocity: { x: 0, y: cV }, trail: []
+      position: { x: cDist, y: 0, z: 0 }, velocity: { x: 0, y: cV, z: 0 }, trail: []
     });
     this.camera.x = 0; this.camera.y = 0; this.camera.zoom = 0.0001;
     this.camera.followingId = bhId;
@@ -639,7 +641,8 @@ export class Simulation {
     if (!dominant) return 999999;
     const dx = vehicle.position.x - dominant.position.x;
     const dy = vehicle.position.y - dominant.position.y;
-    return Math.sqrt(dx * dx + dy * dy) - dominant.radius;
+    const dz = vehicle.position.z - dominant.position.z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) - dominant.radius;
   }
 
   getRelativeSpeed(vehicle: any = this.vehicle): number {
@@ -648,7 +651,8 @@ export class Simulation {
     if (!dominant) return 0;
     const relVx = vehicle.velocity.x - (dominant.velocity ? dominant.velocity.x : 0);
     const relVy = vehicle.velocity.y - (dominant.velocity ? dominant.velocity.y : 0);
-    return Math.sqrt(relVx * relVx + relVy * relVy);
+    const relVz = vehicle.velocity.z - (dominant.velocity ? dominant.velocity.z : 0);
+    return Math.sqrt(relVx * relVx + relVy * relVy + relVz * relVz);
   }
 
   getRadialSpeed(vehicle: any = this.vehicle): number {
@@ -657,10 +661,12 @@ export class Simulation {
     if (!dominant) return 0;
     const dx = vehicle.position.x - dominant.position.x;
     const dy = vehicle.position.y - dominant.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dz = vehicle.position.z - dominant.position.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const relVx = vehicle.velocity.x - (dominant.velocity ? dominant.velocity.x : 0);
     const relVy = vehicle.velocity.y - (dominant.velocity ? dominant.velocity.y : 0);
-    return (relVx * dx + relVy * dy) / dist;
+    const relVz = vehicle.velocity.z - (dominant.velocity ? dominant.velocity.z : 0);
+    return (relVx * dx + relVy * dy + relVz * dz) / dist;
   }
 
   getTangentialSpeed(vehicle: any = this.vehicle): number {
@@ -848,7 +854,7 @@ export class Simulation {
     const earthId = generateId();
     this.bodies.push({
       id: earthId, name: 'Earth', mass: 1.0, radius: 1.0, color: 'hsl(210, 80%, 60%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
 
     this.creationTemplate = { presetType: 'rocket' };
@@ -857,7 +863,7 @@ export class Simulation {
     if (rocket) {
       this.vehicle = rocket as any;
       (this.vehicle as any).parentBodyId = earthId;
-      (this.vehicle as any).relativeOffset = { x: 0, y: -(1.0 + meta.radius) };
+      (this.vehicle as any).relativeOffset = { x: 0, y: -(1.0 + meta.radius), z: 0 };
       (this.vehicle as any).rotation = -Math.PI / 2;
       this.camera.followingId = rocket.id;
       this.camera.zoom = 100;
@@ -876,7 +882,7 @@ export class Simulation {
     const earthId = generateId();
     this.bodies.push({
       id: earthId, name: 'Earth', mass: 1.0, radius: 1.0, color: 'hsl(210, 80%, 60%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
 
     // Real data for April 1, 2026 (Launch Date)
@@ -886,8 +892,8 @@ export class Simulation {
     const moonId = generateId();
     this.bodies.push({
       id: moonId, name: 'Moon', mass: 0.0123, radius: 0.273, color: 'hsl(0, 0%, 80%)',
-      position: { x: Math.cos(moonAngle) * mDist, y: Math.sin(moonAngle) * mDist },
-      velocity: { x: -Math.sin(moonAngle) * mV, y: Math.cos(moonAngle) * mV },
+      position: { x: Math.cos(moonAngle) * mDist, y: Math.sin(moonAngle) * mDist, z: 0 },
+      velocity: { x: -Math.sin(moonAngle) * mV, y: Math.cos(moonAngle) * mV, z: 0 },
       trail: []
     });
 
@@ -903,8 +909,8 @@ export class Simulation {
       radius: meta.radius,
       length: meta.length || meta.radius * 2,
       color: meta.color,
-      position: { x: 0, y: -surfaceAlt },
-      velocity: { x: 0, y: 0 },
+      position: { x: 0, y: -surfaceAlt, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
       trail: [],
       type: 'rocket',
       rotation: -Math.PI / 2, // Upright
@@ -915,7 +921,7 @@ export class Simulation {
     };
 
     (this.vehicle as any).parentBodyId = earthId;
-    (this.vehicle as any).relativeOffset = { x: 0, y: -surfaceAlt };
+    (this.vehicle as any).relativeOffset = { x: 0, y: -surfaceAlt, z: 0 };
 
     this.bodies.push(this.vehicle);
     this.camera.followingId = this.vehicle.id;
@@ -932,7 +938,7 @@ export class Simulation {
     const earthId = generateId();
     this.bodies.push({
       id: earthId, name: 'Target Earth', mass: 1000, radius: 50, color: 'hsl(210, 80%, 40%)',
-      position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, trail: []
+      position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, trail: []
     });
 
     this.creationTemplate = { presetType: 'rocket' };
@@ -945,8 +951,8 @@ export class Simulation {
       radius: meta.radius,
       length: meta.length || meta.radius * 2,
       color: '#ff3333',
-      position: { x: -300, y: 0 },
-      velocity: { x: 40, y: 0 }, 
+      position: { x: -300, y: 0, z: 0 },
+      velocity: { x: 40, y: 0, z: 0 }, 
       trail: [],
       type: 'rocket',
       rotation: 0,
@@ -975,8 +981,8 @@ export class Simulation {
       mass: 1.0,
       radius: earthRadius,
       color: 'hsl(210, 80%, 60%)',
-      position: { x: 0, y: 0 },
-      velocity: { x: 0, y: 0 },
+      position: { x: 0, y: 0, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
       trail: []
     });
 
@@ -990,8 +996,8 @@ export class Simulation {
       radius: meta.radius,
       length: meta.length || meta.radius * 2,
       color: meta.color,
-      position: { x: 0, y: -earthRadius - meta.radius },
-      velocity: { x: 0, y: 0 },
+      position: { x: 0, y: -earthRadius - meta.radius, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
       trail: [],
       type: 'rocket',
       rotation: -Math.PI / 2,
@@ -1002,7 +1008,7 @@ export class Simulation {
     };
 
     (this.vehicle as any).parentBodyId = earthId;
-    (this.vehicle as any).relativeOffset = { x: 0, y: -earthRadius - meta.radius };
+    (this.vehicle as any).relativeOffset = { x: 0, y: -earthRadius - meta.radius, z: 0 };
     this.bodies.push(this.vehicle);
 
     this.camera.followingId = this.vehicle.id;
@@ -1018,7 +1024,7 @@ export class Simulation {
     const rs = (2 * this.G * M_rogue) / (this.C * this.C);
     this.bodies.push({
       id: generateId(), name: 'Rogue Void', mass: M_rogue, radius: Math.max(rs * 2.6, 50), color: '#000000',
-      position: { x: 30000, y: 10000 }, velocity: { x: -0.01, y: -0.004 }, trail: [], isBlackHole: true
+      position: { x: 30000, y: 10000, z: 0 }, velocity: { x: -0.01, y: -0.004, z: 0 }, trail: [], isBlackHole: true, seed: Math.random()
     });
     this.camera.zoom = 0.02;
   }
@@ -1075,8 +1081,9 @@ export class Simulation {
   stepPhysics(stepDt: number, wasmActive: boolean = false) {
 
     // Autopilot Execution & Vehicle Controls
-    for (const v of this.bodies) {
-      if ((v as any).type !== 'rocket' && (v as any).type !== 'heatProtectedRocket') continue;
+    for (const body of this.bodies) {
+      if ((body as any).type !== 'rocket' && (body as any).type !== 'heatProtectedRocket') continue;
+      const v = body as any;
       
       const vIdx = this.bodies.indexOf(v);
       const isAnchored = (v as any).parentBodyId;
@@ -1115,6 +1122,7 @@ export class Simulation {
 
           const rvx = v.velocity.x - dom.velocity.x;
           const rvy = v.velocity.y - dom.velocity.y;
+          const rvz = v.velocity.z - dom.velocity.z;
           progradeAngle = Math.atan2(rvy, rvx) * (180 / Math.PI);
         }
 
@@ -1234,10 +1242,12 @@ export class Simulation {
           if (parent) {
             const dx = v.position.x - parent.position.x;
             const dy = v.position.y - parent.position.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const dz = v.position.z - parent.position.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
             const nudgeDist = (v.radius || 0.0001) * 0.1;
             v.position.x += (dx / dist) * nudgeDist;
             v.position.y += (dy / dist) * nudgeDist;
+            v.position.z += (dz / dist) * nudgeDist;
           }
         }
         v.parentBodyId = null;
@@ -1384,9 +1394,11 @@ export class Simulation {
               this.explosions.push({
                 x: (b1.position.x + b2.position.x) / 2,
                 y: (b1.position.y + b2.position.y) / 2,
+                z: (b1.position.z + b2.position.z) / 2,
                 radius: (b1.radius + b2.radius) * 8, // Much bigger
                 time: 0,
-                maxTime: 1.0
+                maxTime: 1.0,
+                seed: Math.random()
               });
               b1.mass = 0;
               b2.mass = 0;
@@ -1466,9 +1478,11 @@ export class Simulation {
                    // Calculate surface impact point
                    const dx = vehicleBody.position.x - other.position.x;
                    const dy = vehicleBody.position.y - other.position.y;
-                   const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                   const dz = vehicleBody.position.z - other.position.z;
+                   const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
                    const contactX = other.position.x + (dx / dist) * other.radius;
                    const contactY = other.position.y + (dy / dist) * other.radius;
+                   const contactZ = other.position.z + (dz / dist) * other.radius;
 
                    // Kinetic energy based scaling for explosion radius
                    const velocityMultiplier = Math.sqrt(relSpeedSq) * 10;
@@ -1477,6 +1491,7 @@ export class Simulation {
                    this.explosions.push({
                      x: contactX,
                      y: contactY,
+                     z: contactZ,
                      radius: Math.min(energyRadius, other.radius * 2), // Cap for sanity
                      time: 0,
                      maxTime: 1.5,
@@ -1507,27 +1522,30 @@ export class Simulation {
           // Calculate exact surface contact point instead of center average
           const dx = smaller.position.x - bigger.position.x;
           const dy = smaller.position.y - bigger.position.y;
-          const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+          const dz = smaller.position.z - bigger.position.z;
+          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
           const contactX = bigger.position.x + (dx / dist) * bigger.radius;
           const contactY = bigger.position.y + (dy / dist) * bigger.radius;
+          const contactZ = bigger.position.z + (dz / dist) * bigger.radius;
 
           // Scale radius by relative speed (Kinetic Energy factor)
           const dvx = smaller.velocity.x - bigger.velocity.x;
           const dvy = smaller.velocity.y - bigger.velocity.y;
-          const relSpeed = Math.sqrt(dvx*dvx + dvy*dvy);
+          const dvz = smaller.velocity.z - bigger.velocity.z;
+          const relSpeed = Math.sqrt(dvx*dvx + dvy*dvy + dvz*dvz);
           const energyFactor = 1 + (relSpeed * 5); // Faster impact = bigger boom
 
           // Add massive explosion for celestial collision
           this.explosions.push({
             x: contactX,
             y: contactY,
+            z: contactZ,
             // Radius now factors in velocity - MASSIVE for supernovae
             radius: isStarCollision ? (smaller.radius * 150 * energyFactor) : (smaller.radius * 5 * energyFactor), 
             time: 0,
             maxTime: isStarCollision ? 30.0 : (1.0 + energyFactor * 0.1), // 30 seconds for Supernova!
-            isSupernova: isStarCollision,
             seed: Math.random() * 1000
-          } as any);
+          });
 
           bigger.velocity.x = (bigger.mass * bigger.velocity.x + smaller.mass * smaller.velocity.x) / totalMass;
           bigger.velocity.y = (bigger.mass * bigger.velocity.y + smaller.mass * smaller.velocity.y) / totalMass;
@@ -1619,7 +1637,7 @@ export class Simulation {
       (body as any).projectedTrailReferenceId = dominantStart.id;
     }
 
-    const projection: Vector2[] = [];
+    const projection: Vector3[] = [];
     const projectionSteps = 240;
     const projectionSubsteps = 4;
     // Adapt projection speed to timeScale
@@ -1628,12 +1646,13 @@ export class Simulation {
     for (let i = 0; i < projectionSteps; i++) {
       for (let s = 0; s < projectionSubsteps; s++) {
         for (const b1 of influencers) {
-          let ax = 0, ay = 0;
+          let ax = 0, ay = 0, az = 0;
           for (const b2 of influencers) {
             if (b1.id === b2.id) continue;
             const dx = b2.position.x - b1.position.x;
             const dy = b2.position.y - b1.position.y;
-            const distSq = dx * dx + dy * dy;
+            const dz = b2.position.z - b1.position.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
             const dist = Math.sqrt(distSq);
             if (dist < 1e-12) continue;
 
@@ -1642,14 +1661,17 @@ export class Simulation {
             const force = this.G * b2.mass / (potentialDist * potentialDist);
             ax += force * (dx / dist);
             ay += force * (dy / dist);
+            az += force * (dz / dist);
           }
           b1.velocity.x += ax * stepDt;
           b1.velocity.y += ay * stepDt;
+          b1.velocity.z += az * stepDt;
         }
 
         for (const b1 of influencers) {
           b1.position.x += b1.velocity.x * stepDt;
           b1.position.y += b1.velocity.y * stepDt;
+          b1.position.z += b1.velocity.z * stepDt;
         }
       }
 
@@ -1658,13 +1680,14 @@ export class Simulation {
         if (domInSim) {
           projection.push({
             x: target.position.x - domInSim.position.x,
-            y: target.position.y - domInSim.position.y
+            y: target.position.y - domInSim.position.y,
+            z: target.position.z - domInSim.position.z
           });
         } else {
-          projection.push({ x: target.position.x, y: target.position.y });
+          projection.push({ x: target.position.x, y: target.position.y, z: target.position.z });
         }
       } else {
-        projection.push({ x: target.position.x, y: target.position.y });
+        projection.push({ x: target.position.x, y: target.position.y, z: target.position.z });
       }
 
       // Collision check
@@ -1673,7 +1696,8 @@ export class Simulation {
         if (other.id === target.id) continue;
         const dx = other.position.x - target.position.x;
         const dy = other.position.y - target.position.y;
-        if (dx * dx + dy * dy < (target.radius + other.radius) ** 2) {
+        const dz = other.position.z - target.position.z;
+        if (dx * dx + dy * dy + dz * dz < (target.radius + other.radius) ** 2) {
           collided = true;
           break;
         }
@@ -1729,21 +1753,23 @@ export class Simulation {
     }
   }
 
-  screenToWorld(sx: number, sy: number, canvasWidth: number, canvasHeight: number): Vector2 {
+  screenToWorld(sx: number, sy: number, canvasWidth: number, canvasHeight: number): Vector3 {
     const cx = canvasWidth / 2;
     const cy = canvasHeight / 2;
     return {
       x: (sx - cx) / this.camera.zoom + this.camera.x,
-      y: (sy - cy) / this.camera.zoom + this.camera.y
+      y: (sy - cy) / this.camera.zoom + this.camera.y,
+      z: 0
     };
   }
 
-  worldToScreen(wx: number, wy: number, canvasWidth: number, canvasHeight: number): Vector2 {
+  worldToScreen(wx: number, wy: number, canvasWidth: number, canvasHeight: number): Vector3 {
     const cx = canvasWidth / 2;
     const cy = canvasHeight / 2;
     return {
       x: (wx - this.camera.x) * this.camera.zoom + cx,
-      y: (wy - this.camera.y) * this.camera.zoom + cy
+      y: (wy - this.camera.y) * this.camera.zoom + cy,
+      z: 0
     };
   }
 }

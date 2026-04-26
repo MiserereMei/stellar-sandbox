@@ -7,11 +7,11 @@
  *   wasm.step(bodies, dt, G, C); // call every physics substep
  */
 
-export const BODY_STRIDE = 7; // must match wasm-src/physics.ts
+export const BODY_STRIDE = 9; // must match wasm-src/physics.ts
 
 export interface PhysicsBody {
-  position: { x: number; y: number };
-  velocity: { x: number; y: number };
+  position: { x: number; y: number; z: number };
+  velocity: { x: number; y: number; z: number };
   mass: number;
   radius: number;
   isBlackHole?: boolean;
@@ -94,12 +94,14 @@ export class PhysicsWasm {
       const base = i * BODY_STRIDE;
       view[base + 0] = b.position.x;
       view[base + 1] = b.position.y;
-      view[base + 2] = b.velocity.x;
-      view[base + 3] = b.velocity.y;
+      view[base + 2] = b.position.z;
+      view[base + 3] = b.velocity.x;
+      view[base + 4] = b.velocity.y;
+      view[base + 5] = b.velocity.z;
       // If anchored, set mass to 0 in WASM to disable gravity simulation for this body
-      view[base + 4] = (b as any).parentBodyId ? 0.0 : b.mass;
-      view[base + 5] = b.radius;
-      view[base + 6] = b.isBlackHole ? 1.0 : 0.0;
+      view[base + 6] = (b as any).parentBodyId ? 0.0 : b.mass;
+      view[base + 7] = b.radius;
+      view[base + 8] = b.isBlackHole ? 1.0 : 0.0;
     }
   }
 
@@ -127,8 +129,10 @@ export class PhysicsWasm {
       const base = i * BODY_STRIDE;
       b.position.x = viewOut[base + 0];
       b.position.y = viewOut[base + 1];
-      b.velocity.x = viewOut[base + 2];
-      b.velocity.y = viewOut[base + 3];
+      b.position.z = viewOut[base + 2];
+      b.velocity.x = viewOut[base + 3];
+      b.velocity.y = viewOut[base + 4];
+      b.velocity.z = viewOut[base + 5];
     }
   }
 
@@ -154,12 +158,14 @@ export class PhysicsWasm {
     if (!this.exports || !this.wasmMemory || index < 0 || index >= this.lastBodyCount) return;
     const ptr = this.exports.getBufferPtr();
     const base = index * BODY_STRIDE;
-    // Read only the first 4 fields: pos.x, pos.y, vel.x, vel.y
-    const view = new Float64Array(this.wasmMemory.buffer, ptr + (base * 8), 4);
+    // Read only the first 6 fields: pos.x,y,z and vel.x,y,z
+    const view = new Float64Array(this.wasmMemory.buffer, ptr + (base * 8), 6);
     body.position.x = view[0];
     body.position.y = view[1];
-    body.velocity.x = view[2];
-    body.velocity.y = view[3];
+    body.position.z = view[2];
+    body.velocity.x = view[3];
+    body.velocity.y = view[4];
+    body.velocity.z = view[5];
   }
 
   /** Legacy single-step method (can be kept for compatibility or simple cases) */

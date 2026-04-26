@@ -44,8 +44,8 @@ const TOOLS = [
               mass: { type: Type.NUMBER },
               radius: { type: Type.NUMBER },
               color: { type: Type.STRING },
-              position: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } } },
-              velocity: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } } },
+              position: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER }, z: { type: Type.NUMBER } } },
+              velocity: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER }, z: { type: Type.NUMBER } } },
             },
             required: ['id', 'name', 'mass', 'radius', 'color', 'position', 'velocity'],
           },
@@ -65,8 +65,8 @@ const TOOLS = [
         mass: { type: Type.NUMBER },
         radius: { type: Type.NUMBER },
         color: { type: Type.STRING },
-        position: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } } },
-        velocity: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } } },
+        position: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER }, z: { type: Type.NUMBER } } },
+        velocity: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER }, z: { type: Type.NUMBER } } },
       },
       required: ['name', 'mass', 'radius', 'color', 'position', 'velocity'],
     },
@@ -104,8 +104,8 @@ const TOOLS = [
       properties: {
         bodyName: { type: Type.STRING, description: 'Name of the planet/body to land on. If omitted and no position is given, uses the largest body. Set to "none" or "space" to place in open space.' },
         vehicleType: { type: Type.STRING, description: '"rocket" (default) or "heatProtectedRocket".' },
-        position: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } }, description: 'Optional: precise position in space.' },
-        velocity: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } }, description: 'Optional: initial velocity.' },
+        position: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER }, z: { type: Type.NUMBER } }, description: 'Optional: precise position in space.' },
+        velocity: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER }, z: { type: Type.NUMBER } }, description: 'Optional: initial velocity.' },
       },
     },
   },
@@ -158,8 +158,8 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
           mass: b.mass ?? 1,
           radius: b.radius ?? 1,
           color: b.color ?? '#ffffff',
-          position: { x: b.position?.x ?? 0, y: b.position?.y ?? 0 },
-          velocity: { x: b.velocity?.x ?? 0, y: b.velocity?.y ?? 0 },
+          position: { x: b.position?.x ?? 0, y: b.position?.y ?? 0, z: b.position?.z ?? 0 },
+          velocity: { x: b.velocity?.x ?? 0, y: b.velocity?.y ?? 0, z: b.velocity?.z ?? 0 },
           trail: [],
           ...(b.isBlackHole ? { isBlackHole: true } : {}),
         }));
@@ -176,8 +176,8 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
           mass: b.mass ?? 1,
           radius: b.radius ?? 1,
           color: b.color ?? '#ffffff',
-          position: { x: b.position?.x ?? 0, y: b.position?.y ?? 0 },
-          velocity: { x: b.velocity?.x ?? 0, y: b.velocity?.y ?? 0 },
+          position: { x: b.position?.x ?? 0, y: b.position?.y ?? 0, z: b.position?.z ?? 0 },
+          velocity: { x: b.velocity?.x ?? 0, y: b.velocity?.y ?? 0, z: b.velocity?.z ?? 0 },
           trail: [],
           ...(b.isBlackHole ? { isBlackHole: true } : {}),
         });
@@ -216,12 +216,13 @@ function executeTool(name: string, args: any, sim: Simulation, onScript?: (s: st
         let relativeOffset = null;
 
         if (planet) {
-          const surfaceOffset = { x: 0, y: -(planet.radius + rocketMeta.radius) };
+          const surfaceOffset = { x: 0, y: -(planet.radius + rocketMeta.radius), z: 0 };
           pos = {
             x: planet.position.x + surfaceOffset.x,
             y: planet.position.y + surfaceOffset.y,
+            z: planet.position.z + surfaceOffset.z,
           };
-          vel = { x: planet.velocity.x, y: planet.velocity.y };
+          vel = { x: planet.velocity.x, y: planet.velocity.y, z: planet.velocity.z };
           parentId = planet.id;
           relativeOffset = surfaceOffset;
         } else if (!args.position && sim.bodies.length > 0) {
@@ -419,7 +420,8 @@ PHYSICS CONTEXT:
 - Use beautiful distinct HSL colors
 
 BODY TYPES & PROPERTIES:
-- Normal star/planet: { name, mass, radius, color, position, velocity } — no extra flags
+- Normal star/planet: { name, mass, radius, color, position, velocity } — position/velocity are Vector3 {x, y, z}
+- You are operating in a 3D simulation space. All coordinates are now 3D.
 - BLACK HOLE: Add "isBlackHole": true to the body object. Use mass 1e7–1e10, radius ~0.5–5, color "#000000". Example:
   { "id": "bh1", "name": "Singularity", "mass": 5000000, "radius": 1.5, "color": "#000000", "isBlackHole": true, "position": {...}, "velocity": {...} }
 - Smaller black holes as "planets": same isBlackHole: true, just lower mass (50000–500000) and closer orbits

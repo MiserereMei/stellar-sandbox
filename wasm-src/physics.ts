@@ -18,7 +18,7 @@
  * All values are in simulation units.
  */
 
-export const BODY_STRIDE: i32 = 7;
+export const BODY_STRIDE: i32 = 9;
 
 // We use a single shared linear-memory buffer exposed to JS.
 // JS writes body data into it, calls stepBodies(), then reads back.
@@ -42,7 +42,7 @@ export function getBufferLen(): i32 {
 }
 
 /**
- * N-body gravity + Euler integration step.
+ * N-body gravity + Euler integration step in 3D.
  *
  * @param n       Number of bodies in the buffer.
  * @param dt      Time-step (sim units).
@@ -55,30 +55,34 @@ export function stepBodies(n: i32, dt: f64, G: f64, C: f64): void {
   // --- Phase 1: Accumulate gravitational accelerations ---
   for (let i: i32 = 0; i < n; i++) {
     const iBase: i32 = i * BODY_STRIDE;
-    const mass_i: f64 = buffer[iBase + 4];
+    const mass_i: f64 = buffer[iBase + 6];
     if (mass_i <= 0.0) continue;
 
     const px_i: f64 = buffer[iBase];
     const py_i: f64 = buffer[iBase + 1];
-    const r_i:  f64 = buffer[iBase + 5];
+    const pz_i: f64 = buffer[iBase + 2];
+    const r_i:  f64 = buffer[iBase + 7];
 
     let ax: f64 = 0.0;
     let ay: f64 = 0.0;
+    let az: f64 = 0.0;
 
     for (let j: i32 = 0; j < n; j++) {
       if (i === j) continue;
       const jBase: i32 = j * BODY_STRIDE;
-      const mass_j: f64 = buffer[jBase + 4];
+      const mass_j: f64 = buffer[jBase + 6];
       if (mass_j <= 0.0) continue;
 
       const dx: f64 = buffer[jBase]     - px_i;
       const dy: f64 = buffer[jBase + 1] - py_i;
-      const distSq: f64 = dx * dx + dy * dy;
+      const dz: f64 = buffer[jBase + 2] - pz_i;
+      
+      const distSq: f64 = dx * dx + dy * dy + dz * dz;
       if (distSq === 0.0) continue;
 
       const dist: f64 = Math.sqrt(distSq);
-      const isJBH: f64 = buffer[jBase + 6];
-      const r_j:   f64 = buffer[jBase + 5];
+      const isJBH: f64 = buffer[jBase + 8];
+      const r_j:   f64 = buffer[jBase + 7];
 
       // Softening: never let bodies get unrealistically close
       const softening: f64 = Math.max(r_i, r_j);
@@ -88,29 +92,34 @@ export function stepBodies(n: i32, dt: f64, G: f64, C: f64): void {
       const force: f64 = G * mass_j / (potDist * potDist);
       ax += force * (dx / dist);
       ay += force * (dy / dist);
+      az += force * (dz / dist);
     }
 
     // Apply acceleration to velocity
-    let vx: f64 = buffer[iBase + 2] + ax * dt;
-    let vy: f64 = buffer[iBase + 3] + ay * dt;
+    let vx: f64 = buffer[iBase + 3] + ax * dt;
+    let vy: f64 = buffer[iBase + 4] + ay * dt;
+    let vz: f64 = buffer[iBase + 5] + az * dt;
 
     // Speed-of-light clamp
-    const speedSq: f64 = vx * vx + vy * vy;
+    const speedSq: f64 = vx * vx + vy * vy + vz * vz;
     if (speedSq > CSq) {
       const speed: f64 = Math.sqrt(speedSq);
       vx = (vx / speed) * C;
       vy = (vy / speed) * C;
+      vz = (vz / speed) * C;
     }
 
-    buffer[iBase + 2] = vx;
-    buffer[iBase + 3] = vy;
+    buffer[iBase + 3] = vx;
+    buffer[iBase + 4] = vy;
+    buffer[iBase + 5] = vz;
   }
 
   // --- Phase 2: Integrate positions ---
   for (let i: i32 = 0; i < n; i++) {
     const iBase: i32 = i * BODY_STRIDE;
-    if (buffer[iBase + 4] <= 0.0) continue;
-    buffer[iBase]     += buffer[iBase + 2] * dt; // x += vx * dt
-    buffer[iBase + 1] += buffer[iBase + 3] * dt; // y += vy * dt
+    if (buffer[iBase + 6] <= 0.0) continue;
+    buffer[iBase]     += buffer[iBase + 3] * dt; // x += vx * dt
+    buffer[iBase + 1] += buffer[iBase + 4] * dt; // y += vy * dt
+    buffer[iBase + 2] += buffer[iBase + 5] * dt; // z += vz * dt
   }
 }

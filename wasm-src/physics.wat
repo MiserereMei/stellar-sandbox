@@ -12,7 +12,7 @@
  (type $10 (func (param i32 i32 f64)))
  (type $11 (func (param i32 f64 f64 f64)))
  (import "env" "abort" (func $~lib/builtins/abort (param i32 i32 i32 i32)))
- (global $wasm-src/physics/BODY_STRIDE i32 (i32.const 7))
+ (global $wasm-src/physics/BODY_STRIDE i32 (i32.const 9))
  (global $~lib/rt/itcms/total (mut i32) (i32.const 0))
  (global $~lib/rt/itcms/threshold (mut i32) (i32.const 0))
  (global $~lib/rt/itcms/state (mut i32) (i32.const 0))
@@ -1590,7 +1590,7 @@
  )
  (func $wasm-src/physics/initBuffer (param $0 i32)
   local.get $0
-  i32.const 7
+  i32.const 9
   i32.mul
   call $~lib/typedarray/Float64Array#constructor
   global.set $wasm-src/physics/buffer
@@ -1934,12 +1934,15 @@
   (local $11 f64)
   (local $12 f64)
   (local $13 f64)
-  (local $14 i32)
-  (local $15 i32)
+  (local $14 f64)
+  (local $15 f64)
   (local $16 f64)
   (local $17 i32)
-  (local $18 f64)
+  (local $18 i32)
   (local $19 f64)
+  (local $20 i32)
+  (local $21 f64)
+  (local $22 f64)
   global.get $~lib/memory/__stack_pointer
   i32.const 8
   i32.sub
@@ -1951,7 +1954,7 @@
   local.get $3
   local.get $3
   f64.mul
-  local.set $9
+  local.set $11
   loop $for-loop|0
    local.get $0
    local.get $7
@@ -1963,10 +1966,10 @@
     i32.store
     local.get $5
     local.get $7
-    i32.const 7
+    i32.const 9
     i32.mul
-    local.tee $14
-    i32.const 4
+    local.tee $17
+    i32.const 6
     i32.add
     call $~lib/typedarray/Float64Array#__get
     f64.const 0
@@ -1978,33 +1981,45 @@
      local.tee $5
      i32.store
      local.get $5
-     local.get $14
+     local.get $17
      call $~lib/typedarray/Float64Array#__get
-     local.set $10
+     local.set $12
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
      local.tee $5
      i32.store
      local.get $5
-     local.get $14
+     local.get $17
      i32.const 1
      i32.add
      call $~lib/typedarray/Float64Array#__get
-     local.set $11
+     local.set $13
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
      local.tee $5
      i32.store
      local.get $5
-     local.get $14
-     i32.const 5
+     local.get $17
+     i32.const 2
      i32.add
      call $~lib/typedarray/Float64Array#__get
-     local.set $12
-     f64.const 0
-     local.set $6
+     local.set $14
+     global.get $~lib/memory/__stack_pointer
+     global.get $wasm-src/physics/buffer
+     local.tee $5
+     i32.store
+     local.get $5
+     local.get $17
+     i32.const 7
+     i32.add
+     call $~lib/typedarray/Float64Array#__get
+     local.set $15
      f64.const 0
      local.set $4
+     f64.const 0
+     local.set $8
+     f64.const 0
+     local.set $9
      i32.const 0
      local.set $5
      loop $for-loop|1
@@ -2019,112 +2034,136 @@
         br_if $for-continue|1
         global.get $~lib/memory/__stack_pointer
         global.get $wasm-src/physics/buffer
-        local.tee $15
+        local.tee $18
         i32.store
-        local.get $15
+        local.get $18
         local.get $5
-        i32.const 7
+        i32.const 9
         i32.mul
-        local.tee $15
-        i32.const 4
+        local.tee $18
+        i32.const 6
         i32.add
         call $~lib/typedarray/Float64Array#__get
-        local.tee $16
+        local.tee $19
         f64.const 0
         f64.le
         br_if $for-continue|1
         global.get $~lib/memory/__stack_pointer
         global.get $wasm-src/physics/buffer
-        local.tee $17
+        local.tee $20
         i32.store
-        local.get $17
-        local.get $15
+        local.get $20
+        local.get $18
         call $~lib/typedarray/Float64Array#__get
-        local.get $10
+        local.get $12
         f64.sub
-        local.set $18
+        local.set $21
         global.get $~lib/memory/__stack_pointer
         global.get $wasm-src/physics/buffer
-        local.tee $17
+        local.tee $20
         i32.store
+        local.get $20
         local.get $18
-        local.get $18
-        f64.mul
-        local.get $17
-        local.get $15
         i32.const 1
         i32.add
         call $~lib/typedarray/Float64Array#__get
-        local.get $11
+        local.get $13
         f64.sub
-        local.tee $8
-        local.get $8
+        local.set $6
+        global.get $~lib/memory/__stack_pointer
+        global.get $wasm-src/physics/buffer
+        local.tee $20
+        i32.store
+        local.get $21
+        local.get $21
+        f64.mul
+        local.get $6
+        local.get $6
         f64.mul
         f64.add
-        local.tee $13
+        local.get $20
+        local.get $18
+        i32.const 2
+        i32.add
+        call $~lib/typedarray/Float64Array#__get
+        local.get $14
+        f64.sub
+        local.tee $10
+        local.get $10
+        f64.mul
+        f64.add
+        local.tee $16
         f64.const 0
         f64.eq
         br_if $for-continue|1
         global.get $~lib/memory/__stack_pointer
         global.get $wasm-src/physics/buffer
-        local.tee $17
+        local.tee $20
         i32.store
-        local.get $17
-        local.get $15
-        i32.const 6
+        local.get $20
+        local.get $18
+        i32.const 8
         i32.add
         call $~lib/typedarray/Float64Array#__get
-        local.set $19
+        local.set $22
         global.get $~lib/memory/__stack_pointer
         global.get $wasm-src/physics/buffer
-        local.tee $17
+        local.tee $20
         i32.store
-        local.get $6
+        local.get $4
         local.get $2
-        local.get $16
+        local.get $19
         f64.mul
-        local.get $13
+        local.get $16
         f64.sqrt
-        local.tee $13
-        local.get $17
-        local.get $15
-        i32.const 5
+        local.tee $16
+        local.get $20
+        local.get $18
+        i32.const 7
         i32.add
         call $~lib/typedarray/Float64Array#__get
-        local.tee $6
+        local.tee $4
         f64.sub
         f64.const 0.2
         f64.max
-        local.get $13
-        local.get $6
-        local.get $12
+        local.get $16
+        local.get $4
+        local.get $15
         f64.max
         f64.const 0.1
         f64.mul
         f64.max
-        local.get $19
+        local.get $22
         f64.const 0.5
         f64.gt
         select
-        local.tee $6
-        local.get $6
-        f64.mul
-        f64.div
-        local.tee $16
-        local.get $18
-        local.get $13
-        f64.div
-        f64.mul
-        f64.add
-        local.set $6
+        local.tee $4
         local.get $4
+        f64.mul
+        f64.div
+        local.tee $19
+        local.get $21
         local.get $16
-        local.get $8
-        local.get $13
         f64.div
         f64.mul
         f64.add
         local.set $4
+        local.get $8
+        local.get $19
+        local.get $6
+        local.get $16
+        f64.div
+        f64.mul
+        f64.add
+        local.set $8
+        local.get $9
+        local.get $19
+        local.get $10
+        local.get $16
+        f64.div
+        f64.mul
+        f64.add
+        local.set $9
        end
        local.get $5
        i32.const 1
@@ -2138,11 +2177,11 @@
      local.tee $5
      i32.store
      local.get $5
-     local.get $14
-     i32.const 2
+     local.get $17
+     i32.const 3
      i32.add
      call $~lib/typedarray/Float64Array#__get
-     local.get $6
+     local.get $4
      local.get $1
      f64.mul
      f64.add
@@ -2151,36 +2190,60 @@
      global.get $wasm-src/physics/buffer
      local.tee $5
      i32.store
-     local.get $9
-     local.get $6
-     local.get $6
-     f64.mul
      local.get $5
-     local.get $14
-     i32.const 3
+     local.get $17
+     i32.const 4
      i32.add
      call $~lib/typedarray/Float64Array#__get
-     local.get $4
+     local.get $8
      local.get $1
      f64.mul
      f64.add
-     local.tee $4
+     local.set $4
+     global.get $~lib/memory/__stack_pointer
+     global.get $wasm-src/physics/buffer
+     local.tee $5
+     i32.store
+     local.get $11
+     local.get $6
+     local.get $6
+     f64.mul
+     local.get $4
      local.get $4
      f64.mul
      f64.add
+     local.get $5
+     local.get $17
+     i32.const 5
+     i32.add
+     call $~lib/typedarray/Float64Array#__get
+     local.get $9
+     local.get $1
+     f64.mul
+     f64.add
      local.tee $8
+     local.get $8
+     f64.mul
+     f64.add
+     local.tee $9
      f64.lt
      if
       local.get $6
-      local.get $8
+      local.get $9
       f64.sqrt
-      local.tee $8
+      local.tee $9
       f64.div
       local.get $3
       f64.mul
       local.set $6
-      local.get $4
       local.get $8
+      local.get $9
+      f64.div
+      local.get $3
+      f64.mul
+      local.set $8
+      local.get $4
+      local.get $9
       f64.div
       local.get $3
       f64.mul
@@ -2191,8 +2254,8 @@
      local.tee $5
      i32.store
      local.get $5
-     local.get $14
-     i32.const 2
+     local.get $17
+     i32.const 3
      i32.add
      local.get $6
      call $~lib/typedarray/Float64Array#__set
@@ -2201,10 +2264,20 @@
      local.tee $5
      i32.store
      local.get $5
-     local.get $14
-     i32.const 3
+     local.get $17
+     i32.const 4
      i32.add
      local.get $4
+     call $~lib/typedarray/Float64Array#__set
+     global.get $~lib/memory/__stack_pointer
+     global.get $wasm-src/physics/buffer
+     local.tee $5
+     i32.store
+     local.get $5
+     local.get $17
+     i32.const 5
+     i32.add
+     local.get $8
      call $~lib/typedarray/Float64Array#__set
     end
     local.get $7
@@ -2227,10 +2300,10 @@
     i32.store
     local.get $5
     local.get $7
-    i32.const 7
+    i32.const 9
     i32.mul
     local.tee $5
-    i32.const 4
+    i32.const 6
     i32.add
     call $~lib/typedarray/Float64Array#__get
     f64.const 0
@@ -2239,26 +2312,26 @@
     if
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
-     local.tee $14
+     local.tee $17
      i32.store
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
-     local.tee $15
+     local.tee $18
      i32.store offset=4
-     local.get $15
+     local.get $18
      local.get $5
      call $~lib/typedarray/Float64Array#__get
      local.set $2
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
-     local.tee $15
+     local.tee $18
      i32.store offset=4
-     local.get $14
+     local.get $17
      local.get $5
      local.get $2
-     local.get $15
+     local.get $18
      local.get $5
-     i32.const 2
+     i32.const 3
      i32.add
      call $~lib/typedarray/Float64Array#__get
      local.get $1
@@ -2267,29 +2340,60 @@
      call $~lib/typedarray/Float64Array#__set
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
-     local.tee $14
+     local.tee $17
      i32.store
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
-     local.tee $15
+     local.tee $18
      i32.store offset=4
-     local.get $15
+     local.get $18
      local.get $5
      i32.const 1
      i32.add
-     local.tee $15
+     local.tee $18
      call $~lib/typedarray/Float64Array#__get
      local.set $2
      global.get $~lib/memory/__stack_pointer
      global.get $wasm-src/physics/buffer
-     local.tee $17
+     local.tee $20
      i32.store offset=4
-     local.get $14
-     local.get $15
-     local.get $2
      local.get $17
+     local.get $18
+     local.get $2
+     local.get $20
      local.get $5
-     i32.const 3
+     i32.const 4
+     i32.add
+     call $~lib/typedarray/Float64Array#__get
+     local.get $1
+     f64.mul
+     f64.add
+     call $~lib/typedarray/Float64Array#__set
+     global.get $~lib/memory/__stack_pointer
+     global.get $wasm-src/physics/buffer
+     local.tee $17
+     i32.store
+     global.get $~lib/memory/__stack_pointer
+     global.get $wasm-src/physics/buffer
+     local.tee $18
+     i32.store offset=4
+     local.get $18
+     local.get $5
+     i32.const 2
+     i32.add
+     local.tee $18
+     call $~lib/typedarray/Float64Array#__get
+     local.set $2
+     global.get $~lib/memory/__stack_pointer
+     global.get $wasm-src/physics/buffer
+     local.tee $20
+     i32.store offset=4
+     local.get $17
+     local.get $18
+     local.get $2
+     local.get $20
+     local.get $5
+     i32.const 5
      i32.add
      call $~lib/typedarray/Float64Array#__get
      local.get $1
