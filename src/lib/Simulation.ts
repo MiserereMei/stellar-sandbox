@@ -1148,10 +1148,13 @@ export class Simulation {
       }
 
       // Apply angular momentum
-      const torque = v.isAutopilotActive ? 5.0 : 5.0 / Math.max(1, this.timeScale);
-      if (v.isAutopilotActive) {
-        let rotAmount = v.rotationAmount || 0;
+      const torque = 15.0 / (v.isAutopilotActive ? 1 : Math.max(1, this.timeScale));
+      let rotAmount = v.rotationAmount || 0;
 
+      if (v.manualTargetRotation !== undefined && v.manualTargetRotation !== null) {
+        v.rotation = v.manualTargetRotation;
+        v.angularVelocity = 0;
+      } else if (v.isAutopilotActive) {
         const targetPitch = v.targetPitch;
         if (targetPitch !== undefined && targetPitch !== null) {
           const dom = this.getDominantBody(v.position);
@@ -1165,49 +1168,62 @@ export class Simulation {
             while (angleDiff > 180) angleDiff -= 360;
             while (angleDiff < -180) angleDiff += 360;
 
-            const p = 0.05;
-            const d = 0.15;
+            const p = 0.4;
+            const d = 0.6;
             rotAmount = angleDiff * p - (v.angularVelocity * (180 / Math.PI)) * d;
             rotAmount = Math.max(-1, Math.min(1, rotAmount));
           }
         }
-
         v.angularVelocity += rotAmount * torque * stepDt;
       } else {
-        if (v.rotatingLeft) v.angularVelocity -= torque * stepDt;
-        if (v.rotatingRight) v.angularVelocity += torque * stepDt;
+        // Fallback to old boolean flags if amount is 0
+        if (rotAmount === 0) {
+          if (v.rotatingLeft) rotAmount = -1;
+          if (v.rotatingRight) rotAmount = 1;
+        }
+        v.angularVelocity += rotAmount * torque * stepDt;
       }
 
       v.angularVelocity *= Math.pow(0.1, stepDt);
-      v.rotation += v.angularVelocity * stepDt;
-
-      // Apply thrust
-      let totalAcceleration = 0;
-      if (v.isAutopilotActive) {
-        const thrustAmount = v.thrustAmount || 0;
-        const effectiveThrustPower = Math.max(v.thrustPower || 0, 2.5e-6);
-        totalAcceleration += thrustAmount * effectiveThrustPower;
-      } else if (v.thrusting) {
-        totalAcceleration += (v.thrustPower || 0);
+      if (v.manualTargetRotation === undefined || v.manualTargetRotation === null) {
+        v.rotation += v.angularVelocity * stepDt;
       }
 
-      // Apply booster thrusts
-      if (v.activeBoosters && v.activeBoosters.length > 0) {
-        const METER_PER_UNIT = 6371000;
-        const KG_PER_UNIT_MASS = 5.972e24;
-        const vehicleMassKg = v.mass * KG_PER_UNIT_MASS;
+      // Apply thrust
+      const effectiveThrustPower = Math.max(v.thrustPower || 0, 2.5e-6);
+      let thrustAmount = v.thrustAmount || 0;
+      
+      // Fallback for manual boolean thrusting
+      if (!v.isAutopilotActive && v.thrusting && thrustAmount === 0) {
+        thrustAmount = 1.0;
+      }
+      
+      let totalAcceleration = thrustAmount * effectiveThrustPower;
 
-        for (let i = v.activeBoosters.length - 1; i >= 0; i--) {
-          const booster = v.activeBoosters[i];
-          if (this.missionTime >= booster.endTime) {
-            if (booster.cbId !== undefined && booster.cbId !== null) {
-              if (v.sandbox) v.sandbox.fireCallback(booster.cbId);
+      // Apply booster thrusts
+      const METER_PER_UNIT = 6371000;
+      const KG_PER_UNIT_MASS = 5.972e24;
+      const vehicleMassKg = v.mass * KG_PER_UNIT_MASS;
+
+      if (v.isIgniting || (v.activeBoosters && v.activeBoosters.length > 0)) {
+        if (v.isIgniting) {
+          const a_meters = 35000000 / vehicleMassKg;
+          totalAcceleration += a_meters / METER_PER_UNIT;
+        }
+
+        if (v.activeBoosters) {
+          for (let i = v.activeBoosters.length - 1; i >= 0; i--) {
+            const booster = v.activeBoosters[i];
+            if (this.missionTime >= booster.endTime) {
+              if (booster.cbId !== undefined && booster.cbId !== null) {
+                if (v.sandbox) v.sandbox.fireCallback(booster.cbId);
+              }
+              v.activeBoosters.splice(i, 1);
+            } else {
+              const a_meters = booster.thrust / vehicleMassKg;
+              const a_sim = a_meters / METER_PER_UNIT;
+              totalAcceleration += a_sim;
             }
-            v.activeBoosters.splice(i, 1);
-          } else {
-            const a_meters = booster.thrust / vehicleMassKg;
-            const a_sim = a_meters / METER_PER_UNIT;
-            totalAcceleration += a_sim;
           }
         }
       }

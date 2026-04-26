@@ -30,6 +30,7 @@ import {
   Camera,
 } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
+import { MobileFlightController } from "./MobileFlightController";
 import { AnimatePresence, motion } from "motion/react";
 
 // Disable PIXI's buggy static ResizePlugin as we handle resizing manually in the ticker
@@ -1777,89 +1778,114 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 .poly(polyPoints)
                 .fill({ color: b.color, alpha: 1.0 });
 
-              // Thrust fire
-              if ((v as any).thrusting) {
-                const firePts = [
-                  { x: -0.9, y: 0.12 },
-                  { x: -3.0, y: 0 },
-                  { x: -0.9, y: -0.12 },
-                ];
-                let fPoly = firePts.flatMap((p) => [
-                  (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
-                  (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
-                ]);
+              // --- Improved Thrust/Booster Visuals ---
+              const thrustAmount = (v as any).thrustAmount || (v.thrusting ? 1.0 : 0);
+              const hasBoosters = (v as any).isIgniting || (v.activeBoosters && v.activeBoosters.length > 0);
 
-                // Apply warp to fire too (Relative)
-                if (warpActive) {
-                  for (let i = 0; i < fPoly.length; i += 2) {
-                    let px = fPoly[i];
-                    let py = fPoly[i + 1];
-                    for (let iter = 0; iter < 3; iter++) {
-                      let offsetX = 0,
-                        offsetY = 0;
-                      for (const lense of bgLenses) {
-                        const dx = px - (lense.position.x - cx);
-                        const dy = py - (lense.position.y - cy);
-                        const distSq = dx * dx + dy * dy;
-                        const warpStrength =
-                          lense.mass / 20.0 + lense.radius * lense.radius * 0.5;
-                        const deformation =
-                          warpStrength / Math.max(distSq, 1.0);
-                        const clampedDef = Math.min(deformation, 1.0);
-                        offsetX += dx * clampedDef;
-                        offsetY += dy * clampedDef;
+              if (thrustAmount > 0.05 || hasBoosters) {
+                // 1. BOOSTER FLAME (Kudretli SRB Style)
+                if (hasBoosters) {
+                  const bSize = 8.0; // Even longer
+                  const bWidth = 0.4; // Much wider
+                  const boosterFirePts = [
+                    { x: -0.9, y: bWidth },
+                    { x: -bSize, y: 0 },
+                    { x: -0.9, y: -bWidth },
+                  ];
+                  let bPoly = boosterFirePts.flatMap((p) => [
+                    (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                    (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
+                  ]);
+                  // Apply warp to booster flame
+                  if (warpActive) {
+                    for (let i = 0; i < bPoly.length; i += 2) {
+                      let px = bPoly[i], py = bPoly[i + 1];
+                      for (let iter = 0; iter < 2; iter++) {
+                        let ox = 0, oy = 0;
+                        for (const lense of bgLenses) {
+                          const dx = px - (lense.position.x - cx), dy = py - (lense.position.y - cy), ds = dx*dx + dy*dy;
+                          const def = (lense.mass/20 + lense.radius*lense.radius*0.5) / Math.max(ds, 1.0);
+                          const cDef = Math.min(def, 1.0);
+                          ox += dx * cDef; oy += dy * cDef;
+                        }
+                        px = bPoly[i] + ox; py = bPoly[i+1] + oy;
                       }
-                      px = fPoly[i] + offsetX;
-                      py = fPoly[i + 1] + offsetY;
+                      bPoly[i] = px; bPoly[i+1] = py;
                     }
-                    fPoly[i] = px;
-                    fPoly[i + 1] = py;
                   }
+                  
+                  // Outer Glow (Red)
+                  targetGraphics.poly(bPoly).fill({ color: "#ff2200", alpha: 0.4 });
+                  
+                  // Mid Flame (Orange)
+                  const midPts = [
+                    { x: -0.9, y: bWidth * 0.7 },
+                    { x: -bSize * 0.8, y: 0 },
+                    { x: -0.9, y: -bWidth * 0.7 },
+                  ];
+                  let mPoly = midPts.flatMap((p) => [
+                    (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                    (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
+                  ]);
+                  targetGraphics.poly(mPoly).fill({ color: "#ff8800", alpha: 0.7 });
+
+                  // Inner White-Hot Core
+                  const corePts = [
+                    { x: -0.9, y: bWidth * 0.3 },
+                    { x: -bSize * 0.5, y: 0 },
+                    { x: -0.9, y: -bWidth * 0.3 },
+                  ];
+                  let bcPoly = corePts.flatMap((p) => [
+                    (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                    (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
+                  ]);
+                  targetGraphics.poly(bcPoly).fill({ color: "#ffffff", alpha: 1.0 });
                 }
-                targetGraphics
-                  .poly(fPoly)
-                  .fill({ color: "#ff4b00", alpha: 0.8 });
 
-                const corePts = [
-                  { x: -0.9, y: 0.08 },
-                  { x: -2.0, y: 0 },
-                  { x: -0.9, y: -0.08 },
-                ];
-                let cPoly = corePts.flatMap((p) => [
-                  (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
-                  (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
-                ]);
+                // 2. MAIN ENGINE FLAME (Cyan/Blue, Scalable)
+                if (thrustAmount > 0.05) {
+                  const fSize = 1.0 + (thrustAmount * 2.5); // Scalable length
+                  const firePts = [
+                    { x: -0.9, y: 0.12 },
+                    { x: -fSize, y: 0 },
+                    { x: -0.9, y: -0.12 },
+                  ];
+                  let fPoly = firePts.flatMap((p) => [
+                    (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                    (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
+                  ]);
 
-                // Apply warp to fire core (Relative)
-                if (warpActive) {
-                  for (let i = 0; i < cPoly.length; i += 2) {
-                    let px = cPoly[i];
-                    let py = cPoly[i + 1];
-                    for (let iter = 0; iter < 3; iter++) {
-                      let offsetX = 0,
-                        offsetY = 0;
-                      for (const lense of bgLenses) {
-                        const dx = px - (lense.position.x - cx);
-                        const dy = py - (lense.position.y - cy);
-                        const distSq = dx * dx + dy * dy;
-                        const warpStrength =
-                          lense.mass / 20.0 + lense.radius * lense.radius * 0.5;
-                        const deformation =
-                          warpStrength / Math.max(distSq, 1.0);
-                        const clampedDef = Math.min(deformation, 1.0);
-                        offsetX += dx * clampedDef;
-                        offsetY += dy * clampedDef;
+                  // Apply warp to main fire
+                  if (warpActive) {
+                    for (let i = 0; i < fPoly.length; i += 2) {
+                      let px = fPoly[i], py = fPoly[i + 1];
+                      for (let iter = 0; iter < 2; iter++) {
+                        let ox = 0, oy = 0;
+                        for (const lense of bgLenses) {
+                          const dx = px - (lense.position.x - cx), dy = py - (lense.position.y - cy), ds = dx*dx + dy*dy;
+                          const def = (lense.mass/20 + lense.radius*lense.radius*0.5) / Math.max(ds, 1.0);
+                          const cDef = Math.min(def, 1.0);
+                          ox += dx * cDef; oy += dy * cDef;
+                        }
+                        px = fPoly[i] + ox; py = fPoly[i+1] + oy;
                       }
-                      px = cPoly[i] + offsetX;
-                      py = cPoly[i + 1] + offsetY;
+                      fPoly[i] = px; fPoly[i+1] = py;
                     }
-                    cPoly[i] = px;
-                    cPoly[i + 1] = py;
                   }
+                  // Cyan plasma color
+                  targetGraphics.poly(fPoly).fill({ color: "#00f2ff", alpha: 0.8 });
+
+                  const corePts = [
+                    { x: -0.9, y: 0.06 },
+                    { x: -fSize * 0.6, y: 0 },
+                    { x: -0.9, y: -0.06 },
+                  ];
+                  let cPoly = corePts.flatMap((p) => [
+                    (b.position.x - cx) * zoom + (p.x * r_px * cos - p.y * r_px * sin),
+                    (b.position.y - cy) * zoom + (p.x * r_px * sin + p.y * r_px * cos),
+                  ]);
+                  targetGraphics.poly(cPoly).fill({ color: "#ffffff", alpha: 0.9 });
                 }
-                targetGraphics
-                  .poly(cPoly)
-                  .fill({ color: "#ffffcc", alpha: 1.0 });
               }
             } else {
               // HIGH FIDELITY LEVEL OF DETAIL (LOD)
@@ -2457,6 +2483,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
           />
         )}
       </AnimatePresence>
+      <MobileFlightController sim={sim} isMobile={isMobile} />
     </div>
   );
 };
